@@ -13,6 +13,6 @@
 
 int main(void)
 {
-	puts("!!!Hello World!!!1"); /* prints !!!Hello World!!! */
+	puts("!!!Hello World!!!100"); /* prints !!!Hello World!!! */
 	return EXIT_SUCCESS;
 }
