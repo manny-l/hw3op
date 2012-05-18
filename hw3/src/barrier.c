@@ -6,7 +6,9 @@
  */
 
 #include <pthread.h>
+#include <stdlib.h>
 #include "barrier.h"
+
 
 barrier_t* init_barrier(int N)
 {
