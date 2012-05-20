@@ -1,8 +1,8 @@
 
 #include <stdlib.h>
-#unclude <stdio.h>
+#include <stdio.h>
 
-struct node_t 
+struct node_t
 {
 	int key;
 	char unique;
@@ -12,7 +12,7 @@ struct node_t
 
 typedef struct node_t node;
 
-struct  DoublyLinkedList_t 
+struct  DoublyLinkedList_t
 {
 	node* HEAD;
 	node* TAIL;
@@ -35,7 +35,7 @@ void Destroy()
 }
 
 Bool InsertHead(int key, char data)
-{	
+{
 	node newNode;
 	if (list->HEAD!=NULL)
 	{
@@ -78,11 +78,11 @@ Bool InsertHead(int key, char data)
 			}
 		}
 	}
-		
+
 }
 
 Bool InsertTail(int key, char data)
-{	
+{
 	node newNode;
 	if (list->TAIL!=NULL)
 	{
@@ -125,11 +125,11 @@ Bool InsertTail(int key, char data)
 			}
 		}
 	}
-		
+
 }
 
 Bool Delete(int key)
-{	
+{
 	node* tmp, previous, next;
 	if (list->HEAD == NULL)
 	{
