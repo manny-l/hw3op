@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>//TODO: remove assert at end of debug
 #include <pthread.h>
 #include <semaphore.h>
 //#include "b5-9.h"
 #include "doublyLinkedList.h"
 
-#define MAX_ORDER_SIZE 10
+#define MAX_COMMAND_SIZE 25
 #define INIT_ARR_SIZE 25
 
 //barrier struct dfsdfgdfg
@@ -19,7 +20,7 @@ struct barrierData{
 
 //struct for parameters for threads
 typedef struct threadData_t{
-	char currOrder[MAX_ORDER_SIZE];
+	char currOrder[MAX_COMMAND_SIZE];
 	int	key;
 	char val;
 	pthread_t threadID;
@@ -38,10 +39,10 @@ DoublyLinkedList list;
 //functions declarations
 int initBarrierStruct(int threadNum);
 int getOrderBatch();
-void runOrders(threadDataPnt orderList[],int threadNum);
-void* newThreads(void* data);
+void runOrders(threadDataPnt commandList[],int threadNum);
+void newThreads(void* data);
 void barrier();
-void freeCurrList(threadDataPnt orderList[],int threadsNum);
+void freeCurrList(threadDataPnt commandList[],int threadsNum);
 int initLocks();
 void freeAndDestroy();
 
@@ -52,15 +53,15 @@ Description: call getOrderBatch in a loop
 -----------------------------------------------------------------*/
 int main(){
 
-	int i,res = 0;
-	char currOrder[MAX_ORDER_SIZE];
+	int res = 0;
+	char currOrder[MAX_COMMAND_SIZE];
 
 	//start reading data from stdin
 	scanf ("%s",currOrder);
 
 	//checking if first line is: BEGIN
 	if (strcmp(currOrder,"BEGIN") != 0){
-		printf("Error, first order is not BEGIN!\n");
+		printf("Error, first command is not BEGIN!\n");
 		return (-1);
 	}
 	else{
@@ -68,7 +69,7 @@ int main(){
 	}
 
 	//locks initializing
-	if (-1 == initLocks()){
+	if (initLocks() == -1){
 		printf("Error, lock initializing failed!\n");
 		return -1;
 	}
@@ -82,12 +83,12 @@ int main(){
 	*/
 	Initialize();
 
-	//executing batches of orders until END is read
-	while (0 == res){
+	//executing batches of commands until END is read
+	while (res == 0){
 		res = getOrderBatch();
 	}
 
-	//free tree & detroy locks
+	//free DBLL & detroy locks
 	freeAndDestroy();
 
 	return res;
@@ -172,11 +173,11 @@ int initLocks(){
 /*----------------------------------------------------------------
 getOrderBatch function:
 Input: NONE (uses global data)
-Output: 0 - if the last order in the batch was Barrier
-		1 - if the last order in the batch was End
+Output: 0 - if the last command in the batch was Barrier
+		1 - if the last command in the batch was End
 	   -1 - for errors
-Description: - reading the orders of a single section
-			 - saving the orders in orderList
+Description: - reading the commands of a single section
+			 - saving the commands in commandList
 			 - initializing the BarrierStruct
 			 - calling the function runOrders
 -----------------------------------------------------------------*/
@@ -184,106 +185,105 @@ int getOrderBatch(){
 
 	//local parameters
 	int arrSize = INIT_ARR_SIZE;
-	threadDataPnt* orderList;
-	char order[MAX_ORDER_SIZE];
+	threadDataPnt* commandList;
+	char command[MAX_COMMAND_SIZE];
 	threadDataPnt currData;
 	int threadsNum = 0;
-	int ind;
+	int i;
 
-	//reading the first order
-	scanf ("%s",order);
-	if (!strcmp(order,"BARRIER")){
+	//reading the first command
+	scanf ("%s",command);
+	if (!strcmp(command,"BARRIER")){
 		printf("BARRIER\n");
 		return 0;
 	}
-	if (!strcmp(order,"END")){
+	if (!strcmp(command,"END")){
 		printf("END\n");
 		return 1;
 	}
 
-	//allocating a list for the data of the orders
-	orderList = (threadDataPnt*)malloc(arrSize*sizeof(threadDataPnt));
-	if(orderList == NULL){
+	//allocating a list for the data of the commands
+	commandList = (threadDataPnt*)malloc(arrSize*sizeof(threadDataPnt));
+	if(commandList == NULL){
 		printf("Error in memory allocation\n");
 		exit(0);
 	}
 
 	//reading data while the section is not finished
-	while(strcmp(order,"BARRIER") && strcmp(order,"END")){
+	while(strcmp(command,"BARRIER") && strcmp(command,"END")){
 
-		//allocated data struct for order data
+		//allocated data struct for command data
 		currData = (threadDataPnt)malloc(sizeof(struct threadData_t));
 		if (currData == NULL){
 			printf("Error in memory allocation\n");
-			freeCurrList(orderList,threadsNum);
+			freeCurrList(commandList,threadsNum);
 			exit(0);
 		}
 
-		//insert order data for thread
-		strcpy(currData->currOrder,order);
+		//insert command data for thread
+		strcpy(currData->currOrder,command);
 
-		if (strcmp(order,"INSERT")==0){
+		if ((strcmp(command,"INSERT_HEAD")==0) || (strcmp(command,"INSERT_HEAD")==0)){
 			scanf ("%d %c",&(currData->key),&(currData->val));
-		}
-		else{ // ORDER=FIND
+		} else { // COMMAND == DELETE or FIND
 			scanf ("%d",&(currData->key));
 		}
 
 		//Enlarging data array if it is too small
 		if (threadsNum == arrSize){
 			arrSize = arrSize*2;
-			orderList = (threadDataPnt*)realloc
-						(orderList,arrSize*sizeof(threadDataPnt));
-			if (orderList == NULL){
-				freeCurrList(orderList,threadsNum);
+			commandList = (threadDataPnt*)realloc
+						(commandList,arrSize*sizeof(threadDataPnt));
+			if (commandList == NULL){
+				freeCurrList(commandList,threadsNum);
 				printf("Error in memory allocation\n");
 				return -1;
 			}
 		}
 
 
-		//inserting data to orderList as array
-		orderList[threadsNum] = currData;
+		//inserting data to commandList as array
+		commandList[threadsNum] = currData;
 
-		//counting the num of orders
+		//counting the num of commands
 		threadsNum++;
 
-		//reading the next order
-		scanf ("%s",order);
-	}
+		//reading the next command
+		scanf ("%s",command);
+	} //end of while loop, reached BARRIER or END
 
 	if (threadsNum > 0){
 
 		//initialize the Barrier Struct
-		if (-1 == initBarrierStruct(threadsNum)){
-			freeCurrList(orderList,threadsNum);
+		if (initBarrierStruct(threadsNum) == -1){
+			freeCurrList(commandList,threadsNum);
 			return -1;
 		}
 
-		//run the orders
-		runOrders(orderList,threadsNum);
+		//run the commands
+		runOrders(commandList,threadsNum);
 
 		//wait for all the threads to end
-		for (ind = 0; ind < threadsNum; ind++){
-			if(orderList[ind]->threadID != -1){
-				pthread_join(orderList[ind]->threadID,NULL);
+		for (i = 0; i < threadsNum; i++){
+			if(commandList[i]->threadID != -1){
+				pthread_join(commandList[i]->threadID,NULL);
 			}
 		}
 
 		//free list
-		freeCurrList(orderList,threadsNum);
+		freeCurrList(commandList,threadsNum);
 	}
 	else{
-		free(orderList);
+		free(commandList);
 	}
 
 	//RETURN VALUES
-	if (!strcmp(order,"BARRIER")){
+	if (!strcmp(command,"BARRIER")){
 		printf("BARRIER\n");
 		return 0;
 	}
 
-	if (!strcmp(order,"END")){
+	if (!strcmp(command,"END")){
 		printf("END\n");
 		return 1;
 	}
@@ -292,46 +292,46 @@ int getOrderBatch(){
 
 /*----------------------------------------------------------------
 freeCurrList function:
-Input: orderList = list of orders
-	   threadNum = number of orders in the list
+Input: commandList = list of commands
+	   threadNum = number of commands in the list
 Output: none
-Description: frees the order list
+Description: frees the command list
 -----------------------------------------------------------------*/
-void freeCurrList(threadDataPnt orderList[],int threadsNum){
+void freeCurrList(threadDataPnt commandList[],int threadsNum){
 
-	int ind;
+	int i;
 	threadDataPnt currData;
-	//free the orders in the order list
-	for (ind = 0; ind < threadsNum; ind++){
-		currData = orderList[ind];
+	//free the commands in the command list
+	for (i = 0; i < threadsNum; i++){
+		currData = commandList[i];
 		free(currData);
-		orderList[ind] = 0;
+		commandList[i] = 0;
 	}
 
-	//free the the order list
-	free(orderList);
+	//free the command list
+	free(commandList);
 }
 
 
 /*----------------------------------------------------------------
 runOrders function:
-Input: orderList = list of orders
-	   threadNum = number of orders in the list
+Input: commandList = list of commands
+	   threadNum = number of commands in the list
 Output: none
-Description: creates a thread for every order in the list and sends
-		it to the newThreads function with the relevant order data
+Description: creates a thread for every command in the list and sends
+		it to the newThreads function with the relevant command data
 -----------------------------------------------------------------*/
-void runOrders(threadDataPnt orderList[],int threadNum){
+void runOrders(threadDataPnt commandList[],int threadNum){
 
 	pthread_t threadIndex;
-	int ind;
+	int i;
 
-	for (ind = 0; ind < threadNum; ind++){
+	for (i = 0; i < threadNum; i++){
 
 		//allocate thread
-		if (pthread_create(&(orderList[ind]->threadID),NULL,newThreads,orderList[ind])){
+		if (pthread_create(&(commandList[i]->threadID),NULL,newThreads,commandList[i])){
 			printf ("Error in thread creation\n");
-			orderList[ind]->threadID = -1;
+			commandList[i]->threadID = -1;
 			//if thread creation failed update number of running threads
 			pthread_mutex_lock(&counterLock);
 				bData.threadNum--;
@@ -383,12 +383,12 @@ void barrier(){
 
 /*----------------------------------------------------------------
 newThreads function:
-Input: data struct containing: order,key & val
+Input: data struct cotaining: command,ket & val
 Output: none
 Description: waits in the barrier for the other threads.
-	And then performs the order and prints the result to stdout
+	And then performs the command and prints the result to stdout
 -----------------------------------------------------------------*/
-void* newThreads(void* data){
+void newThreads(void* data){
 
 	int res;
 	//waiting for all the other threads
@@ -400,14 +400,21 @@ void* newThreads(void* data){
 		threadDataPnt currData = (threadDataPnt)data;
 
 		//find/insert in tree
-		if (strcmp(currData->currOrder,"FIND") == 0){
+		if (strcmp(currData->currOrder,"INSERT_HEAD") == 0){
 			//res = findElm(currTree,currData->key,&(currData->val));
-			res = Search(currData->key,&(currData->val));
-		}
-		else{
+			//TODO: insert to head of DBLL command here
+			res= InsertHead(currData->key,currData->val);
+		} else if (strcmp(currData->currOrder,"INSERT_TAIL") == 0){
 			//res = addElm(currTree,currData->key,currData->val);
-			res = InsertHead(currData->key,currData->val);
-
+			//TODO: insert to tail of DBLL command here
+			res= InsertTail(currData->key,currData->val);
+		} else if (strcmp(currData->currOrder,"DELETE") == 0){
+			//TODO: delete element from DBLL command here
+			res= Delete(currData->key);
+		} else {
+			assert((strcmp(currData->currOrder,"SEARCH") == 0));
+			//TODO: search element within DBLL
+			res = Search(currData->key,currData->val);
 		}
 
 		if (-2==res){
@@ -417,6 +424,32 @@ void* newThreads(void* data){
 
 		//write result to output
 		pthread_mutex_lock(&writeToOutputLock);
+			if (strcmp(currData->currOrder,"INSERT_HEAD") == 0){//TODO: change res references
+				if (!res){
+					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"TRUE");
+				} else {
+					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"FALSE");
+				}
+			} else if (strcmp(currData->currOrder,"INSERT_TAIL") == 0){
+				if (!res){
+					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"TRUE");
+				} else {
+					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"FALSE");
+				}
+			} else if (strcmp(currData->currOrder,"DELETE") == 0){
+				if (!res){
+					printf("%s %d -> %s\n",currData->currOrder,currData->key,"TRUE");
+				} else {
+					printf("%s %d -> %s\n",currData->currOrder,currData->key,"FALSE");
+				}
+			} else { assert((strcmp(currData->currOrder,"SEARCH") == 0));
+				if (!res){
+					printf("%s %d -> %c\n",currData->currOrder,currData->key,currData->val);
+				} else {
+					printf("%s %d -> %s\n",currData->currOrder,currData->key,"FALSE");
+				}
+			}
+			/*
 			if (strcmp(currData->currOrder,"FIND") == 0){
 				if (!res){
 					printf("%s %d -> %c\n",currData->currOrder,currData->key,currData->val);
@@ -433,6 +466,7 @@ void* newThreads(void* data){
 					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"FALSE");
 				}
 			}
+			*/
 		pthread_mutex_unlock(&writeToOutputLock);
 	}
 
