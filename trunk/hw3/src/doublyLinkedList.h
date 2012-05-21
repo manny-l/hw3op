@@ -8,9 +8,12 @@
 #ifndef DOUBLYLINKEDLIST_H_
 #define DOUBLYLINKEDLIST_H_
 
-typedef struct DoublyLinkedList_t DoublyLinkedList;
+#include <stdbool.h>
+//typedef enum {false,true} bool;
 
-void Initialize ();
+typedef struct DoublyLinkedList_t* DoublyLinkedList;
+
+void Initialize();
 void Destroy();
 bool InsertHead (int key, char data);
 bool InsertTail(int key, char data);
