@@ -377,7 +377,7 @@ void barrier(){
 
 /*----------------------------------------------------------------
 newThreads function:
-Input: data struct cotaining: order,ket & val
+Input: data struct containing: order,key & val
 Output: none
 Description: waits in the barrier for the other threads.
 	And then performs the order and prints the result to stdout
