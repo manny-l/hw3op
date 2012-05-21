@@ -3,12 +3,13 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include "b5-9.h"
+//#include "b5-9.h"
+#include "doublyLinkedList.h"
 
 #define MAX_ORDER_SIZE 10
 #define INIT_ARR_SIZE 25
 
-//barrier struct
+//barrier struct dfsdfgdfg
 struct barrierData{
 	int threadNum;
 	int threadsInBarrier;
@@ -31,7 +32,8 @@ pthread_mutex_t writeToOutputLock;
 pthread_mutexattr_t attr1;
 pthread_mutex_t counterLock;
 pthread_mutexattr_t attr2;
-tree currTree;
+//tree currTree;
+DoublyLinkedList list;
 
 //functions declarations
 int initBarrierStruct(int threadNum);
@@ -72,10 +74,13 @@ int main(){
 	}
 
 	//tree initializing
+	/*
 	if (-1 ==  initTree(&currTree)){
 		printf("Error, tree initializing failed!\n");
 		return (-1);
 	}
+	*/
+	Initialize();
 
 	//executing batches of orders until END is read
 	while (0 == res){
@@ -90,7 +95,8 @@ int main(){
 
 void freeAndDestroy(){
 	//free the tree
-	freeTree(currTree);
+	//freeTree(currTree);
+	Destroy();
 
 	//destroy locks for barrier
 	sem_destroy(&(bData.enterBarrier));
@@ -395,10 +401,13 @@ void* newThreads(void* data){
 
 		//find/insert in tree
 		if (strcmp(currData->currOrder,"FIND") == 0){
-			res = findElm(currTree,currData->key,&(currData->val));
+			//res = findElm(currTree,currData->key,&(currData->val));
+			res = Search(currData->key,&(currData->val));
 		}
 		else{
-			res = addElm(currTree,currData->key,currData->val);
+			//res = addElm(currTree,currData->key,currData->val);
+			res = InsertHead(currData->key,currData->val);
+
 		}
 
 		if (-2==res){

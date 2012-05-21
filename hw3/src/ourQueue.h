@@ -4,7 +4,8 @@
 #include <stdlib.h>
 
 typedef enum {Read,Write,MayWrite} Action;
-typedef enum {false,true} bool;
+//typedef enum {false,true} bool;
+#include <stdbool.h>
 
 typedef struct queue_data{
 	Action type;
