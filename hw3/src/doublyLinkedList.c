@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include "doublyLinkedList.h"
 
 
 struct node_t
@@ -27,7 +28,7 @@ struct  DoublyLinkedList_t
 	node* HEAD;
 	node* TAIL;
 } ;
-typedef struct DoublyLinkedList_t DoublyLinkedList;
+
 
 DoublyLinkedList list;
 
@@ -104,7 +105,6 @@ bool InsertHead (int key, char data)
 			list.HEAD=newNode;
 			list.TAIL->previous=list.HEAD;
 			list.TAIL->next=list.HEAD;
-			printf("check2\n");
 			return true;
 		}
 		if (list.HEAD->key < key)
@@ -130,7 +130,6 @@ bool InsertHead (int key, char data)
 		newNode->previous->next=newNode;
 		list.HEAD->previous = newNode;
 		list.HEAD = newNode;
-		printf("check4\n");
 		return true;
 	}
 	//replacing the tail
@@ -141,7 +140,6 @@ bool InsertHead (int key, char data)
 		list.TAIL->next = newNode;
 		newNode->next->previous = newNode;
 		list.TAIL = newNode;
-		printf("%d\n",list.HEAD->next->next->key);
 		return true;
 	}
 	if ((list.HEAD->key==key) || (list.TAIL->key))
@@ -191,20 +189,20 @@ bool InsertTail(int key, char data)
 	{
 		if (list.TAIL->key > key)
 		{
-			newNode->next=list.HEAD;
-			newNode->previous=list.TAIL;
-			list.HEAD=newNode;
-			list.TAIL->previous=list.HEAD;
-			list.TAIL->next=list.HEAD;
-			return true;
-		}
-		if (list.HEAD->key < key)
-		{
 			newNode->next=list.TAIL;
 			newNode->previous=list.TAIL;
+			list.HEAD=newNode;
+			list.TAIL->previous=newNode;
+			list.TAIL->next=newNode;
+			return true;
+		}
+		if (list.TAIL->key < key)
+		{
+			newNode->next=list.HEAD;
+			newNode->previous=list.HEAD;
 			list.TAIL=newNode;
-			list.HEAD->previous=list.HEAD;
-			list.HEAD->next=list.HEAD;
+			list.HEAD->previous=newNode;
+			list.HEAD->next=newNode;
 			return true;
 		}
 		//list->HEAD->Key == key
@@ -296,7 +294,7 @@ bool Delete(int key)
 	return false;
 }
 
-bool search(int key, char* data)
+bool Search(int key, char* data)
 {
 	node* tmp;
 	int flag = 0;
@@ -327,12 +325,28 @@ int main ()
 	Initialize();
 	printf("finish Initializing\n");
 	InsertTail(1,'a');
-	InsertTail(2,'b');
-	InsertTail(4,'d');
 	printf("The first num is: %d\n",list.HEAD->key);
-	node* tmp=list.TAIL->next;
+	if (list.HEAD!=list.TAIL)
+	{
+		printf("error: the head and tail are different");
+	}
+	InsertTail(2,'b');
+	char* data;
+	if (search(4,data)!=false)
+	{
+		printf("error in search");
+	}
+	InsertHead(4,'d');
+	if (search(4,data)==false)
+	{
+		printf("error in search");
+	}
+	Delete(4);
+	InsertTail(5,'e');
+	node* tmp=list.HEAD->next;
 	printf("The second num is: %d\n",tmp->key);
 	printf("The third num is: %d\n",list.HEAD->next->next->key);
+	printf("The 4 num is: %d\n",list.HEAD->next->next->next->key);
 	return 0;
-}
-*/
+}*/
+

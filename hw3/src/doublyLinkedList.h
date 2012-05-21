@@ -15,6 +15,6 @@ void Destroy();
 bool InsertHead (int key, char data);
 bool InsertTail(int key, char data);
 bool Delete(int key);
-bool search(int key, char* data);
+bool Search(int key, char* data);
 
 #endif /* DOUBLYLINKEDLIST_H_ */
