@@ -423,7 +423,7 @@ void newThreads(void* data){
 		} else {
 			assert((strcmp(currData->currOrder,"SEARCH") == 0));
 			//TODO: search element within DBLL
-			res = Search(currData->key,currData->val);
+			res = Search(currData->key,&(currData->val));
 		}
 
 		/*
