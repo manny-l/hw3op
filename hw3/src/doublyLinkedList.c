@@ -39,7 +39,7 @@ void Initialize ()
 	(list) = (DoublyLinkedList)malloc(sizeof(struct DoublyLinkedList_t));
 	if ((list) == NULL)
 	{
-		printf("Error in memory allocation\n");
+		//printf("Error in memory allocation\n");
 		exit(0);
 	}
 	//(*list)->root = NULL;
@@ -72,7 +72,7 @@ void Destroy()
 	//The list includes one node
 	if (list->HEAD == list->TAIL)
 	{
-		free(tmp);
+		free(list->HEAD);
 		list->HEAD=NULL;
 		list->TAIL=NULL;
 		return;
@@ -81,7 +81,7 @@ void Destroy()
 	tmp = list->HEAD;
 	while (tmp!=list->TAIL)
 	{
-		next=tmp;
+		next=tmp->next;
 		free(tmp);
 		tmp = next;
 	}
@@ -111,7 +111,7 @@ bool InsertHead (int key, char data)
 		newNode->previous=NULL;
 		list->HEAD=newNode;
 		list->TAIL=newNode;
-		printf("%d\n",list->HEAD->key);
+		//printf("%d\n",list->HEAD->key);
 		return true;
 	}
 
@@ -139,7 +139,6 @@ bool InsertHead (int key, char data)
 		//list->HEAD->Key == key
 		return false;
 	}
-
 	//The list is not empty
 	tmp = list->HEAD;
 	//replacing the Head
@@ -174,11 +173,12 @@ bool InsertHead (int key, char data)
 			newNode->next = tmp->next;
 			tmp->next = newNode;
 			newNode->next->previous = newNode;
-			printf("check6");
+			//printf("check6");
 			return true;
 		}
 		tmp=tmp->next;
 	}
+	//printf("reached end of inserthead\n");
 	return false;
 }
 
@@ -338,9 +338,21 @@ bool Search(int key, char* data)
 	return false;
 }
 
-/*
-int main ()
+
+/*int main ()
 {
+	printf("hello 0\n");
+	bool retval;
+	Initialize();
+	printf("hello 1\n");
+	retval=InsertHead(5,'a');
+	printf("hello 2\n");
+	printf("list head key is %d and %c\n",list->HEAD->key,list->HEAD->unique);
+	printf("retval is %s\n", (retval)? "true" : "false");
+	printf("starting to destroy\n");
+	Destroy();
+	printf("finished\n");
+	return 0;
 	printf("start checking\n");
 	Initialize();
 	printf("finish Initializing\n");
@@ -352,12 +364,12 @@ int main ()
 	}
 	InsertTail(2,'b');
 	char* data;
-	if (search(4,data)!=false)
+	if (Search(4,data)!=false)
 	{
 		printf("error in search");
 	}
 	InsertHead(4,'d');
-	if (search(4,data)==false)
+	if (Search(4,data)==false)
 	{
 		printf("error in search");
 	}
@@ -369,4 +381,3 @@ int main ()
 	printf("The 4 num is: %d\n",list->HEAD->next->next->next->key);
 	return 0;
 }*/
-

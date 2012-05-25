@@ -223,10 +223,16 @@ int getOrderBatch(){
 		//insert command data for thread
 		strcpy(currData->currOrder,command);
 
-		if ((strcmp(command,"INSERT_HEAD")==0) || (strcmp(command,"INSERT_HEAD")==0)){
+		if ((strcmp(command,"INSERT_HEAD")==0) || (strcmp(command,"INSERT_TAIL")==0)){
 			scanf ("%d %c",&(currData->key),&(currData->val));
+			//printf("got %s %d %c\n",currData->currOrder,
+			//						currData->key,
+			//						currData->val);
 		} else { // COMMAND == DELETE or FIND
 			scanf ("%d",&(currData->key));
+			//printf("got %s %d %c\n",currData->currOrder,
+			//		currData->key,
+			//		currData->val);
 		}
 
 		//Enlarging data array if it is too small
@@ -383,7 +389,7 @@ void barrier(){
 
 /*----------------------------------------------------------------
 newThreads function:
-Input: data struct cotaining: command,ket & val
+Input: data struct cotaining: command,key & val
 Output: none
 Description: waits in the barrier for the other threads.
 	And then performs the command and prints the result to stdout
