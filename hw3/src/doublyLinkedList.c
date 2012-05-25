@@ -245,14 +245,16 @@ bool InsertTail(int key, char data)
 		return true;
 	}
 
+	tmp = list->TAIL;
 	while (tmp!=list->HEAD)
 	{
-		if (tmp->key<key)
+		if (tmp->key>key)
 		{
 			newNode->previous = tmp;
 			newNode->next = tmp->next;
 			tmp->next = newNode;
 			newNode->next->previous = newNode;
+			return true;
 		}
 		tmp=tmp->next;
 	}
