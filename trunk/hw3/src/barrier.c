@@ -396,7 +396,10 @@ Description: waits in the barrier for the other threads.
 -----------------------------------------------------------------*/
 void newThreads(void* data){
 
-	int res;
+	bool res;
+
+	int z;
+
 	//waiting for all the other threads
 	barrier();
 
@@ -423,33 +426,35 @@ void newThreads(void* data){
 			res = Search(currData->key,currData->val);
 		}
 
+		/*
 		if (-2==res){
 			printf("Fatal error in find or add functions\n");
 			exit(0);
 		}
+		*/
 
 		//write result to output
 		pthread_mutex_lock(&writeToOutputLock);
 			if (strcmp(currData->currOrder,"INSERT_HEAD") == 0){//TODO: change res references
-				if (!res){
+				if (res==true){
 					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"TRUE");
 				} else {
 					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"FALSE");
 				}
 			} else if (strcmp(currData->currOrder,"INSERT_TAIL") == 0){
-				if (!res){
+				if (res==true){
 					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"TRUE");
 				} else {
 					printf("%s %d %c -> %s\n",currData->currOrder,currData->key,currData->val,"FALSE");
 				}
 			} else if (strcmp(currData->currOrder,"DELETE") == 0){
-				if (!res){
+				if (res==true){
 					printf("%s %d -> %s\n",currData->currOrder,currData->key,"TRUE");
 				} else {
 					printf("%s %d -> %s\n",currData->currOrder,currData->key,"FALSE");
 				}
 			} else { assert((strcmp(currData->currOrder,"SEARCH") == 0));
-				if (!res){
+				if (res==true){
 					printf("%s %d -> %c\n",currData->currOrder,currData->key,currData->val);
 				} else {
 					printf("%s %d -> %s\n",currData->currOrder,currData->key,"FALSE");
