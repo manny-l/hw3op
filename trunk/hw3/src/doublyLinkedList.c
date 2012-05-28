@@ -36,6 +36,8 @@ extern DoublyLinkedList list;
 
 void Initialize ()
 {
+	node* newNode;
+
 	(list) = (DoublyLinkedList)malloc(sizeof(struct DoublyLinkedList_t));
 	if ((list) == NULL)
 	{
@@ -43,8 +45,18 @@ void Initialize ()
 		exit(0);
 	}
 
-	list->HEAD=NULL;
-	list->TAIL=NULL;
+	newNode = (node*) malloc(sizeof (struct node_t));
+	if (newNode==NULL)
+	{
+		exit(0);
+	}
+
+	newNode->key=0;
+	newNode->unique='0';
+	newNode->next = newNode;
+	newNode->previous = newNode;
+	list->HEAD=newNode;
+	list->TAIL=newNode;
 
 	//(*list)->isEmpty = 1;
 
@@ -104,117 +116,52 @@ bool InsertHead (int key, char data)
 	newNode->key=key;
 	newNode->unique=data;
 
-	//The list is empty. after that the HEAD and TAIL
-	//will point to the same node
-	if (list->HEAD==NULL)
+	//The list is empty: node 0 is found.
+	if (list->HEAD==list->TAIL) //key 0
 	{
-		get_write_lock(&(list->listLock));
+		//get_write_lock(&(list->listLock));
 
 		//check if list is still empty
-		if (list->HEAD==NULL)
+		if (list->HEAD==list->TAIL)
 		{
-			newNode->next=newNode;
-			newNode->previous=newNode;
-			list->HEAD=newNode;
-			list->TAIL=newNode;
+			list->HEAD->next = newNode;
+			list->HEAD->previous = newNode;
+
+			newNode->next=list->HEAD;
+			newNode->previous=list->HEAD;
+
+			list->TAIL = newNode;
+
 			//printf("%d\n",list->HEAD->key);
-			release_exclusive_lock(&(list->listLock));
+			//release_exclusive_lock(&(list->listLock));
 			return true;
 		}
 
-		release_exclusive_lock(&(list->listLock));
+		//release_exclusive_lock(&(list->listLock));
 	}
 
-	//The list has one node
-	get_may_write_lock(&(list->listLock));
-	if (list->HEAD==list->TAIL)
-	{
-		currRoot=list->HEAD;
-		get_read_lock(&(currRoot->nodeLock));
-		tempKey = currRoot->key;
-		release_shared_lock(&(currRoot->nodeLock));
+	//one node or more
+	tmp = list->HEAD->next;
 
-		if (tempKey == key) //list->HEAD->Key == key
+	while (tmp!=list->HEAD)
+	{
+		if (tmp->key==key)
 		{
-			release_shared_lock(&(list->listLock));
 			return false;
 		}
-
-		upgrade_may_write_lock(&(list->listLock));
-
-		if (tempKey > key)
+		else if  (tmp->key>key)
 		{
-			newNode->next=list->HEAD;
-			newNode->previous=list->TAIL;
-			list->HEAD=newNode;
-			list->TAIL->previous=list->HEAD;
-			list->TAIL->next=list->HEAD;
-		}
+			newNode->previous = tmp->previous;
+			tmp->previous->next = newNode;
 
-		if (tempKey < key)
-		{
-			newNode->next=list->TAIL;
-			newNode->previous=list->HEAD;
-			list->TAIL=newNode;
-			list->HEAD->previous=list->TAIL;
-			list->HEAD->next=list->TAIL;
-		}
-
-		release_exclusive_lock(&(list->listLock));
-		return true;
-	}
-	else
-	{
-		release_shared_lock(&(list->listLock));
-	}
-
-
-
-	//more than one node
-	tmp = list->HEAD;
-
-	//replacing the Head
-	if (list->HEAD->key > key)
-	{
-		newNode->next = list->HEAD;
-		newNode->previous = list->HEAD->previous;
-		newNode->previous->next=newNode;
-		list->HEAD->previous = newNode;
-		list->HEAD = newNode;
-		return true;
-	}
-
-	//replacing the tail
-	if (list->TAIL->key<key)
-	{
-		newNode->previous = list->TAIL;
-		newNode->next = list->TAIL->next;
-		list->TAIL->next = newNode;
-		newNode->next->previous = newNode;
-		list->TAIL = newNode;
-		return true;
-	}
-
-	if ((list->HEAD->key==key) || (list->TAIL->key))
-	{
-		return false;
-	}
-
-
-	while (tmp!=list->TAIL)
-	{
-		if  (tmp->key<key)
-		{
-			newNode->previous = tmp;
-			newNode->next = tmp->next;
-			tmp->next = newNode;
-			newNode->next->previous = newNode;
-			//printf("check6");
+			newNode->next = tmp;
+			tmp->previous = newNode;
 			return true;
 		}
 		tmp=tmp->next;
 	}
 	//printf("reached end of inserthead\n");
+
 	return false;
 }
 
@@ -355,15 +302,15 @@ bool Delete(int key)
 bool Search(int key, char* data)
 {
 	node* tmp;
-	int flag = 0;
 	//The list is empty
-	if (list->HEAD == NULL)
+	if (list->HEAD == list->TAIL)
 	{
+		//printf("my list is empty\n");
 		return false;
 	}
 	//The list is not empty
-	tmp = list->HEAD;
-	while ((tmp!=list->HEAD) || (flag == 0))
+	tmp = list->HEAD->next;
+	while (tmp!=list->HEAD)
 	{
 		if (tmp->key == key)
 		{
@@ -371,7 +318,6 @@ bool Search(int key, char* data)
 			return true;
 		}
 		tmp = tmp->next;
-		flag = 1;
 	}
 	return false;
 }
