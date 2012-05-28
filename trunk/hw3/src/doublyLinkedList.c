@@ -42,19 +42,18 @@ void Initialize ()
 		//printf("Error in memory allocation\n");
 		exit(0);
 	}
-	//(*list)->root = NULL;
-	//(*list)->isEmpty = 1;
-
-	/*
-	if (lock_init(&((*list)->treeLock))==-1)
-	{
-		free((*list));
-		return -1;
-	}
-	*/
 
 	list->HEAD=NULL;
 	list->TAIL=NULL;
+
+	//(*list)->isEmpty = 1;
+
+	if (lock_init(&(list->listLock))==-1)
+	{
+		free(list);
+		printf("not ok\n");
+		exit(0);
+	}
 
 	return;
 }
@@ -94,6 +93,8 @@ bool InsertHead (int key, char data)
 {
 	node* newNode;
 	node* tmp;
+	int tempKey;
+	node* currRoot;
 
 	newNode = (node*) malloc(sizeof (struct node_t));
 	if (newNode==NULL)
@@ -107,40 +108,71 @@ bool InsertHead (int key, char data)
 	//will point to the same node
 	if (list->HEAD==NULL)
 	{
-		newNode->next=NULL;
-		newNode->previous=NULL;
-		list->HEAD=newNode;
-		list->TAIL=newNode;
-		//printf("%d\n",list->HEAD->key);
-		return true;
+		get_write_lock(&(list->listLock));
+
+		//check if list is still empty
+		if (list->HEAD==NULL)
+		{
+			newNode->next=newNode;
+			newNode->previous=newNode;
+			list->HEAD=newNode;
+			list->TAIL=newNode;
+			//printf("%d\n",list->HEAD->key);
+			release_exclusive_lock(&(list->listLock));
+			return true;
+		}
+
+		release_exclusive_lock(&(list->listLock));
 	}
 
 	//The list has one node
+	get_may_write_lock(&(list->listLock));
 	if (list->HEAD==list->TAIL)
 	{
-		if (list->HEAD->key > key)
+		currRoot=list->HEAD;
+		get_read_lock(&(currRoot->nodeLock));
+		tempKey = currRoot->key;
+		release_shared_lock(&(currRoot->nodeLock));
+
+		if (tempKey == key) //list->HEAD->Key == key
+		{
+			release_shared_lock(&(list->listLock));
+			return false;
+		}
+
+		upgrade_may_write_lock(&(list->listLock));
+
+		if (tempKey > key)
 		{
 			newNode->next=list->HEAD;
 			newNode->previous=list->TAIL;
 			list->HEAD=newNode;
 			list->TAIL->previous=list->HEAD;
 			list->TAIL->next=list->HEAD;
-			return true;
 		}
-		if (list->HEAD->key < key)
+
+		if (tempKey < key)
 		{
 			newNode->next=list->TAIL;
 			newNode->previous=list->HEAD;
 			list->TAIL=newNode;
 			list->HEAD->previous=list->TAIL;
 			list->HEAD->next=list->TAIL;
-			return true;
 		}
-		//list->HEAD->Key == key
-		return false;
+
+		release_exclusive_lock(&(list->listLock));
+		return true;
 	}
-	//The list is not empty
+	else
+	{
+		release_shared_lock(&(list->listLock));
+	}
+
+
+
+	//more than one node
 	tmp = list->HEAD;
+
 	//replacing the Head
 	if (list->HEAD->key > key)
 	{
@@ -151,6 +183,7 @@ bool InsertHead (int key, char data)
 		list->HEAD = newNode;
 		return true;
 	}
+
 	//replacing the tail
 	if (list->TAIL->key<key)
 	{
@@ -161,10 +194,13 @@ bool InsertHead (int key, char data)
 		list->TAIL = newNode;
 		return true;
 	}
+
 	if ((list->HEAD->key==key) || (list->TAIL->key))
 	{
 		return false;
 	}
+
+
 	while (tmp!=list->TAIL)
 	{
 		if  (tmp->key<key)
@@ -197,8 +233,8 @@ bool InsertTail(int key, char data)
 	//The list is empty
 	if (list->TAIL == NULL)
 	{
-		newNode->next = NULL;
-		newNode->previous = NULL;
+		newNode->next = newNode;
+		newNode->previous = newNode;
 		list->HEAD = newNode;
 		list->TAIL = newNode;
 		return true;
