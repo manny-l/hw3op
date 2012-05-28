@@ -19,7 +19,7 @@ struct node_t
 	int key;
 	char unique;
 	struct node_t *next;
-	struct node_t *previous;
+	struct node_t *prev;
 	lock nodeLock;
 };
 
@@ -27,8 +27,8 @@ typedef struct node_t node;
 
 struct  DoublyLinkedList_t
 {
-	node* HEAD;
-	node* TAIL;
+	node* head;
+	node* tail;
 	lock listLock;
 } ;
 
@@ -54,14 +54,15 @@ void Initialize ()
 	newNode->key=0;
 	newNode->unique='0';
 	newNode->next = newNode;
-	newNode->previous = newNode;
-	list->HEAD=newNode;
-	list->TAIL=newNode;
+	newNode->prev = newNode;
+	list->head=newNode;
+	list->tail=newNode;
 
 	//(*list)->isEmpty = 1;
 
 	if (lock_init(&(list->listLock))==-1)
 	{
+		free(newNode);
 		free(list);
 		printf("not ok\n");
 		exit(0);
@@ -76,28 +77,28 @@ void Destroy()
 	node* tmp;
 	node* next;
 	//The list is empty
-	if (list->HEAD == NULL)
+	if (list->head == NULL)
 	{
 		return;
 	}
 	//The list includes one node
-	if (list->HEAD == list->TAIL)
+	if (list->head == list->tail)
 	{
-		free(list->HEAD);
-		list->HEAD=NULL;
-		list->TAIL=NULL;
+		free(list->head);
+		list->head=NULL;
+		list->tail=NULL;
 		return;
 	}
 	//The list contains more then one node
-	tmp = list->HEAD;
-	while (tmp!=list->TAIL)
+	tmp = list->head;
+	while (tmp!=list->tail)
 	{
 		next=tmp->next;
 		free(tmp);
 		tmp = next;
 	}
-	list->HEAD=NULL;
-	list->TAIL=NULL;
+	list->head=NULL;
+	list->tail=NULL;
 	return;
 }
 
@@ -106,33 +107,33 @@ bool InsertHead (int key, char data)
 	node* newNode;
 	node* tmp;
 	int tempKey;
-	node* currRoot;
+	node* currHead;
 
 	newNode = (node*) malloc(sizeof (struct node_t));
 	if (newNode==NULL)
 	{
-		return false;
+		exit(0);
 	}
 	newNode->key=key;
 	newNode->unique=data;
 
 	//The list is empty: node 0 is found.
-	if (list->HEAD==list->TAIL) //key 0
+	if (list->head==list->tail) //key 0
 	{
 		//get_write_lock(&(list->listLock));
 
 		//check if list is still empty
-		if (list->HEAD==list->TAIL)
+		if (list->head==list->tail)
 		{
-			list->HEAD->next = newNode;
-			list->HEAD->previous = newNode;
+			list->head->next = newNode;
+			list->head->prev = newNode;
 
-			newNode->next=list->HEAD;
-			newNode->previous=list->HEAD;
+			newNode->next=list->head;
+			newNode->prev=list->head;
 
-			list->TAIL = newNode;
+			list->tail = newNode;
 
-			//printf("%d\n",list->HEAD->key);
+			//printf("%d\n",list->head->key);
 			//release_exclusive_lock(&(list->listLock));
 			return true;
 		}
@@ -141,160 +142,141 @@ bool InsertHead (int key, char data)
 	}
 
 	//one node or more
-	tmp = list->HEAD->next;
+	tmp = list->head->next;
 
-	while (tmp!=list->HEAD)
+	while (tmp!=list->head)
 	{
 		if (tmp->key==key)
 		{
+			free(newNode);
 			return false;
 		}
 		else if  (tmp->key>key)
 		{
-			newNode->previous = tmp->previous;
-			tmp->previous->next = newNode;
+			newNode->prev = tmp->prev;
+			tmp->prev->next = newNode;
 
 			newNode->next = tmp;
-			tmp->previous = newNode;
+			tmp->prev = newNode;
+
 			return true;
 		}
 		tmp=tmp->next;
 	}
-	//printf("reached end of inserthead\n");
 
-	return false;
+	//Replace tail
+	list->tail->next = newNode;
+	list->head->prev = newNode;
+
+	newNode->next = list->head;
+	newNode->prev = list->tail;
+
+	list->tail = newNode;
+	return true;
 }
 
 bool InsertTail(int key, char data)
 {
 	node* newNode;
+	node* tmp;
+	int tempKey;
+	node* currTail;
 
 	newNode = (node*) malloc(sizeof (struct node_t));
 	if (newNode==NULL)
 	{
-		return false;
+		exit(0);
 	}
 	newNode->key=key;
 	newNode->unique=data;
 
-	//The list is empty
-	if (list->TAIL == NULL)
+	//The list is empty: node 0 is found.
+	if (list->head==list->tail) //key 0
 	{
-		newNode->next = newNode;
-		newNode->previous = newNode;
-		list->HEAD = newNode;
-		list->TAIL = newNode;
-		return true;
+		//get_write_lock(&(list->listLock));
+
+		//check if list is still empty
+		if (list->head==list->tail)
+		{
+			list->head->next = newNode;
+			list->head->prev = newNode;
+
+			newNode->next=list->head;
+			newNode->prev=list->head;
+
+			list->tail = newNode;
+
+			//printf("%d\n",list->head->key);
+			//release_exclusive_lock(&(list->listLock));
+			return true;
+		}
+
+		//release_exclusive_lock(&(list->listLock));
 	}
 
-	//The list has one node
-	if (list->HEAD==list->TAIL)
+	//one node or more
+	if (list->tail->key==key)
 	{
-		if (list->TAIL->key > key)
-		{
-			newNode->next=list->TAIL;
-			newNode->previous=list->TAIL;
-			list->HEAD=newNode;
-			list->TAIL->previous=newNode;
-			list->TAIL->next=newNode;
-			return true;
-		}
-		if (list->TAIL->key < key)
-		{
-			newNode->next=list->HEAD;
-			newNode->previous=list->HEAD;
-			list->TAIL=newNode;
-			list->HEAD->previous=newNode;
-			list->HEAD->next=newNode;
-			return true;
-		}
-		//list->HEAD->Key == key
+		free(newNode);
 		return false;
 	}
 
-	node *tmp = list->TAIL;
-//
-	//int flag = 0;
+	tmp = list->tail->prev;
 
-
-	//replacing the tail
-	if (list->TAIL->key<key)
+	while (tmp!=list->tail)
 	{
-		newNode->previous = list->TAIL;
-		newNode->next = list->TAIL->next;
-		list->TAIL->next = newNode;
-		newNode->next->previous = newNode;
-		list->TAIL = newNode;
-		return true;
-	}
-
-	tmp = list->TAIL;
-	while (tmp!=list->HEAD)
-	{
-		if (tmp->key>key)
+		if (tmp->key==key)
 		{
-			newNode->previous = tmp;
+			free(newNode);
+			return false;
+		}
+		else if  (tmp->key<key)
+		{
+			newNode->prev = tmp;
 			newNode->next = tmp->next;
+
+			tmp->next->prev = newNode;
 			tmp->next = newNode;
-			newNode->next->previous = newNode;
+
 			return true;
 		}
-		tmp=tmp->next;
+		tmp=tmp->prev;
 	}
+
+	printf("SHOULDNT SEE ME\n");
 	return false;
 }
 
 bool Delete(int key)
 {
 	node* tmp;
-//	node* previous;
+//	node* prev;
 //	node* next;
 	//the list is empty
-	if (list->HEAD == NULL)
+	if (list->head == list->tail)
 	{
 		return false;
 	}
-	//The list has one node
-	if (list->HEAD==list->TAIL)
-	{
-		if (list->HEAD->key==key)
-		{
-			tmp = list->HEAD;
-			list->HEAD=NULL;
-			list->TAIL=NULL;
-			free(tmp);
-			return true;
-		} else
-		{
-			return false;
-		}
-	}
-	tmp = list->HEAD;
-	int flag = 0;
-	while ((tmp!=list->HEAD) || (flag==0))
+
+	tmp = list->head->next;
+
+	while (tmp!=list->head)
 	{
 		if (tmp->key == key)
 		{
-		/*	previous=tmp->previous;
-			next=tmp->next;
-			previous->next = tmp->next;
-			next->previous = tmp->previous;*/
+			tmp->prev->next = tmp->next;
+			tmp->next->prev = tmp->prev;
 
-			tmp->previous->next = tmp->next;
-			tmp->next->previous = tmp->previous;
-			if (tmp==list->HEAD)
+			if (tmp == list->tail)
 			{
-				list->HEAD = tmp->next;
-			}
-			if (tmp == list->TAIL)
-			{
-				list->TAIL= tmp->previous;
+				list->tail= tmp->prev;
+				list->tail->next = list->head;
+				list->head->prev = list->tail;
 			}
 			free(tmp);
 			return true;
 		}
 		tmp = tmp->next;
-		flag = 1;
 	}
 	return false;
 }
@@ -303,14 +285,14 @@ bool Search(int key, char* data)
 {
 	node* tmp;
 	//The list is empty
-	if (list->HEAD == list->TAIL)
+	if (list->head == list->tail)
 	{
 		//printf("my list is empty\n");
 		return false;
 	}
 	//The list is not empty
-	tmp = list->HEAD->next;
-	while (tmp!=list->HEAD)
+	tmp = list->head->next;
+	while (tmp!=list->head)
 	{
 		if (tmp->key == key)
 		{
@@ -331,7 +313,7 @@ bool Search(int key, char* data)
 	printf("hello 1\n");
 	retval=InsertHead(5,'a');
 	printf("hello 2\n");
-	printf("list head key is %d and %c\n",list->HEAD->key,list->HEAD->unique);
+	printf("list head key is %d and %c\n",list->head->key,list->head->unique);
 	printf("retval is %s\n", (retval)? "true" : "false");
 	printf("starting to destroy\n");
 	Destroy();
@@ -341,8 +323,8 @@ bool Search(int key, char* data)
 	Initialize();
 	printf("finish Initializing\n");
 	InsertTail(1,'a');
-	printf("The first num is: %d\n",list->HEAD->key);
-	if (list->HEAD!=list->TAIL)
+	printf("The first num is: %d\n",list->head->key);
+	if (list->head!=list->tail)
 	{
 		printf("error: the head and tail are different");
 	}
@@ -359,9 +341,9 @@ bool Search(int key, char* data)
 	}
 	Delete(4);
 	InsertTail(5,'e');
-	node* tmp=list->HEAD->next;
+	node* tmp=list->head->next;
 	printf("The second num is: %d\n",tmp->key);
-	printf("The third num is: %d\n",list->HEAD->next->next->key);
-	printf("The 4 num is: %d\n",list->HEAD->next->next->next->key);
+	printf("The third num is: %d\n",list->head->next->next->key);
+	printf("The 4 num is: %d\n",list->head->next->next->next->key);
 	return 0;
 }*/
