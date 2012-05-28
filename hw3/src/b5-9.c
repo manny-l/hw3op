@@ -573,6 +573,13 @@ int addElm(tree currTree,int key,char value){
 	else{
 		release_shared_lock(&(currTree->treeLock));
 	}
+
+
+
+
+	//EYAL
+
+
 	//case the root is not NULL or leaf
 	tempVertex = findForInsert(currTree,currTree->root,key,&i,&found,1);
 
