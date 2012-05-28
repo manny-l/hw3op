@@ -47,7 +47,7 @@
 </toolChain>
 </folderInfo>
 <sourceEntries>
-<entry excluding="simpleList.h|simpleList.c|new.c|fparser.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
+<entry excluding="lock_test2.c|lock_test1.c|errorcheck_mutex.h|errorcheck_mutex.c|simpleList.h|simpleList.c|new.c|fparser.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 </sourceEntries>
 </configuration>
 </storageModule>

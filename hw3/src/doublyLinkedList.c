@@ -60,6 +60,14 @@ void Initialize ()
 
 	//(*list)->isEmpty = 1;
 
+	if (lock_init(&(list->head->nodeLock))==-1)
+	{
+		free(newNode);
+		free(list);
+		printf("not ok\n");
+		exit(0);
+	}
+
 	if (lock_init(&(list->listLock))==-1)
 	{
 		free(newNode);
@@ -67,6 +75,8 @@ void Initialize ()
 		printf("not ok\n");
 		exit(0);
 	}
+
+
 
 	return;
 }
@@ -110,6 +120,7 @@ bool InsertHead (int key, char data)
 	node* currHead;
 
 	newNode = (node*) malloc(sizeof (struct node_t));
+
 	if (newNode==NULL)
 	{
 		exit(0);
@@ -117,10 +128,19 @@ bool InsertHead (int key, char data)
 	newNode->key=key;
 	newNode->unique=data;
 
+	if (lock_init(&(newNode->nodeLock))==-1)
+	{
+		free(newNode);
+		printf("not ok\n");
+		exit(0);
+	}
+
+
 	//The list is empty: node 0 is found.
 	if (list->head==list->tail) //key 0
 	{
-		//get_write_lock(&(list->listLock));
+		get_write_lock(&(list->listLock));
+		get_write_lock(&(list->head->nodeLock));
 
 		//check if list is still empty
 		if (list->head==list->tail)
@@ -134,11 +154,13 @@ bool InsertHead (int key, char data)
 			list->tail = newNode;
 
 			//printf("%d\n",list->head->key);
-			//release_exclusive_lock(&(list->listLock));
+			release_exclusive_lock(&(list->head->nodeLock));
+			release_exclusive_lock(&(list->listLock));
+
 			return true;
 		}
-
-		//release_exclusive_lock(&(list->listLock));
+		release_exclusive_lock(&(list->head->nodeLock));
+		release_exclusive_lock(&(list->listLock));
 	}
 
 	//one node or more
@@ -165,6 +187,9 @@ bool InsertHead (int key, char data)
 	}
 
 	//Replace tail
+	get_write_lock(&(list->head->nodeLock));
+	get_write_lock(&(list->tail->nodeLock));
+
 	list->tail->next = newNode;
 	list->head->prev = newNode;
 
@@ -172,6 +197,10 @@ bool InsertHead (int key, char data)
 	newNode->prev = list->tail;
 
 	list->tail = newNode;
+
+	release_exclusive_lock(&(list->tail->nodeLock));
+	release_exclusive_lock(&(list->head->nodeLock));
+
 	return true;
 }
 
@@ -215,16 +244,12 @@ bool InsertTail(int key, char data)
 	}
 
 	//one node or more
-	if (list->tail->key==key)
-	{
-		free(newNode);
-		return false;
-	}
+	tmp = list->tail;
+	bool contFlag = true;
 
-	tmp = list->tail->prev;
-
-	while (tmp!=list->tail)
+	while ((tmp!=list->tail) || (contFlag=true))
 	{
+		contFlag=false;
 		if (tmp->key==key)
 		{
 			free(newNode);
@@ -237,6 +262,11 @@ bool InsertTail(int key, char data)
 
 			tmp->next->prev = newNode;
 			tmp->next = newNode;
+
+			if (tmp==list->tail)
+			{
+				list->tail=newNode;
+			}
 
 			return true;
 		}
