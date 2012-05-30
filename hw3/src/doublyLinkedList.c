@@ -76,8 +76,6 @@ void Initialize ()
 		exit(0);
 	}
 
-
-
 	return;
 }
 
@@ -139,8 +137,12 @@ bool InsertHead (int key, char data)
 	//The list is empty: node 0 is found.
 	if (list->head==list->tail) //key 0
 	{
+		//printf("trying to lock list\n");
 		get_write_lock(&(list->listLock));
+
+		//printf("trying to lock %d\n", list->head->key);
 		get_write_lock(&(list->head->nodeLock));
+
 
 		//check if list is still empty
 		if (list->head==list->tail)
@@ -154,16 +156,28 @@ bool InsertHead (int key, char data)
 			list->tail = newNode;
 
 			//printf("%d\n",list->head->key);
+			//printf("releasing lock %d\n",list->head->key);
 			release_exclusive_lock(&(list->head->nodeLock));
+			//printf("releasing list lock\n");
 			release_exclusive_lock(&(list->listLock));
 
 			return true;
 		}
+		//printf("releasing %d\n", list->head->key);
 		release_exclusive_lock(&(list->head->nodeLock));
+		//printf("releasing list lock\n");
 		release_exclusive_lock(&(list->listLock));
 	}
 
 	//one node or more
+
+	//printf("trying to lock %d\n", list->head->key);
+	get_may_write_lock(&(list->head->nodeLock));
+
+	//printf("trying to lock %d\n", list->head->next->key);
+	get_may_write_lock(&(list->head->next->nodeLock));
+
+
 	tmp = list->head->next;
 
 	while (tmp!=list->head)
@@ -171,24 +185,55 @@ bool InsertHead (int key, char data)
 		if (tmp->key==key)
 		{
 			free(newNode);
+			//printf("releasing %d\n", tmp->key);
+			release_shared_lock(&(tmp->nodeLock));
+			//printf("releasing %d\n", tmp->prev->key);
+			release_shared_lock(&(tmp->prev->nodeLock));
+
 			return false;
+
 		}
 		else if  (tmp->key>key)
 		{
+			//printf("Enter between\n")
+			//printf("upgrade %d\n", tmp->key);
+			upgrade_may_write_lock(&(tmp->nodeLock));
+			//printf("upgrade %d\n", tmp->prev->key);
+			upgrade_may_write_lock(&(tmp->prev->nodeLock));
+
 			newNode->prev = tmp->prev;
 			tmp->prev->next = newNode;
 
 			newNode->next = tmp;
 			tmp->prev = newNode;
 
+			//printf("releasing %d\n", newNode->prev->key);
+			release_exclusive_lock(&(newNode->prev->nodeLock));
+			//printf("releasing %d\n", newNode->next->key);
+			release_exclusive_lock(&(newNode->next->nodeLock));
+
 			return true;
 		}
+
+		//printf("releasing %d\n", tmp->prev->key);
+		release_shared_lock(&(tmp->prev->nodeLock));
+
+		//printf("trying to lock %d\n", tmp->next->key);
+		get_may_write_lock(&(tmp->next->nodeLock));
+
+
 		tmp=tmp->next;
 	}
 
 	//Replace tail
-	get_write_lock(&(list->head->nodeLock));
-	get_write_lock(&(list->tail->nodeLock));
+	//get_write_lock(&(list->head->nodeLock));
+	//get_write_lock(&(list->tail->nodeLock));
+
+	upgrade_may_write_lock(&(list->head->nodeLock));
+	upgrade_may_write_lock(&(list->tail->nodeLock));
+
+
+	//printf("Adding to tail\n");
 
 	list->tail->next = newNode;
 	list->head->prev = newNode;
@@ -196,9 +241,16 @@ bool InsertHead (int key, char data)
 	newNode->next = list->head;
 	newNode->prev = list->tail;
 
-	list->tail = newNode;
+	//printf("trying to lock list\n");
+	get_write_lock(&(list->listLock));
 
-	release_exclusive_lock(&(list->tail->nodeLock));
+	list->tail = newNode;
+	//printf("releasing list\n");
+	release_exclusive_lock(&(list->listLock));
+
+	//printf("releasing %d\n",list->tail->prev->key);
+	release_exclusive_lock(&(list->tail->prev->nodeLock));
+	//printf("releasing %d\n",list->head->key);
 	release_exclusive_lock(&(list->head->nodeLock));
 
 	return true;
@@ -219,10 +271,18 @@ bool InsertTail(int key, char data)
 	newNode->key=key;
 	newNode->unique=data;
 
+	if (lock_init(&(newNode->nodeLock))==-1)
+	{
+		free(newNode);
+		printf("not ok\n");
+		exit(0);
+	}
+
 	//The list is empty: node 0 is found.
 	if (list->head==list->tail) //key 0
 	{
-		//get_write_lock(&(list->listLock));
+		get_write_lock(&(list->listLock));
+		get_write_lock(&(list->head->nodeLock));
 
 		//check if list is still empty
 		if (list->head==list->tail)
@@ -236,15 +296,23 @@ bool InsertTail(int key, char data)
 			list->tail = newNode;
 
 			//printf("%d\n",list->head->key);
-			//release_exclusive_lock(&(list->listLock));
+			release_exclusive_lock(&(list->listLock));
+			release_exclusive_lock(&(list->head->nodeLock));
 			return true;
 		}
 
-		//release_exclusive_lock(&(list->listLock));
+		release_exclusive_lock(&(list->listLock));
+		release_exclusive_lock(&(list->head->nodeLock));
 	}
 
 	//one node or more
+
+
+	get_may_write_lock(&(list->head->nodeLock));
+	get_may_write_lock(&(list->tail->nodeLock));
+
 	tmp = list->tail;
+
 	bool contFlag = true;
 
 	while ((tmp!=list->tail) || (contFlag=true))
@@ -253,10 +321,15 @@ bool InsertTail(int key, char data)
 		if (tmp->key==key)
 		{
 			free(newNode);
+			release_shared_lock(&(tmp->nodeLock));
+			release_shared_lock(&(tmp->next->nodeLock));
 			return false;
 		}
 		else if  (tmp->key<key)
 		{
+			upgrade_may_write_lock(&(tmp->nodeLock));
+			upgrade_may_write_lock(&(tmp->next->nodeLock));
+
 			newNode->prev = tmp;
 			newNode->next = tmp->next;
 
@@ -265,12 +338,23 @@ bool InsertTail(int key, char data)
 
 			if (tmp==list->tail)
 			{
+				get_write_lock(&(list->listLock));
 				list->tail=newNode;
+				list->head->prev = newNode;
+				release_exclusive_lock(&(list->listLock));
 			}
+
+			release_exclusive_lock(&(newNode->prev->nodeLock));
+			release_exclusive_lock(&(newNode->next->nodeLock));
 
 			return true;
 		}
+
+		release_shared_lock(&(tmp->next->nodeLock));
+		get_may_write_lock(&(tmp->prev->nodeLock));
+
 		tmp=tmp->prev;
+
 	}
 
 	printf("SHOULDNT SEE ME\n");
@@ -288,7 +372,9 @@ bool Delete(int key)
 		return false;
 	}
 
+
 	tmp = list->head->next;
+
 
 	while (tmp!=list->head)
 	{
@@ -321,7 +407,10 @@ bool Search(int key, char* data)
 		return false;
 	}
 	//The list is not empty
+
+	get_read_lock(&(list->head->next->nodeLock));
 	tmp = list->head->next;
+
 	while (tmp!=list->head)
 	{
 		if (tmp->key == key)
@@ -329,8 +418,15 @@ bool Search(int key, char* data)
 			*data = tmp->unique;
 			return true;
 		}
+
+		release_shared_lock(&(tmp->nodeLock));
+		get_read_lock(&(tmp->next->nodeLock));
+
 		tmp = tmp->next;
+
 	}
+
+	release_shared_lock(&(tmp->nodeLock));
 	return false;
 }
 
