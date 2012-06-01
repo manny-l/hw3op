@@ -89,24 +89,26 @@ void Destroy()
 	{
 		return;
 	}
-	//The list includes one node
-	if (list->head == list->tail)
-	{
-		free(list->head);
-		list->head=NULL;
-		list->tail=NULL;
-		return;
-	}
+
 	//The list contains more then one node
-	tmp = list->head;
-	while (tmp!=list->tail)
+	tmp = list->head->next;
+	while (tmp!=list->head)
 	{
 		next=tmp->next;
+		lock_destroy(&(tmp->nodeLock));
 		free(tmp);
 		tmp = next;
 	}
-	list->head=NULL;
-	list->tail=NULL;
+
+	lock_destroy(&(list->head->nodeLock));
+	free(list->head);
+
+	lock_destroy(&(list->listLock));
+
+	free(list);
+
+	//list->head=NULL;
+	//list->tail=NULL;
 	return;
 }
 
@@ -235,6 +237,8 @@ bool InsertHead (int key, char data)
 
 	//printf("Adding to tail\n");
 
+	get_write_lock(&(list->listLock));
+
 	list->tail->next = newNode;
 	list->head->prev = newNode;
 
@@ -242,7 +246,7 @@ bool InsertHead (int key, char data)
 	newNode->prev = list->tail;
 
 	//printf("trying to lock list\n");
-	get_write_lock(&(list->listLock));
+
 
 	list->tail = newNode;
 	//printf("releasing list\n");
@@ -408,6 +412,8 @@ bool Delete(int key)
 
 			release_exclusive_lock(&(tmp->next->nodeLock));
 
+			release_exclusive_lock(&(tmp->nodeLock));
+			lock_destroy(&(tmp->nodeLock));
 			free(tmp);
 
 			return true;
