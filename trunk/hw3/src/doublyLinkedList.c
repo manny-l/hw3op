@@ -365,35 +365,59 @@ bool Delete(int key)
 {
 	node* tmp;
 //	node* prev;
-//	node* next;
+//	node* next;;
 	//the list is empty
 	if (list->head == list->tail)
 	{
 		return false;
 	}
 
-
+	get_may_write_lock(&(list->head->next->nodeLock));
 	tmp = list->head->next;
-
 
 	while (tmp!=list->head)
 	{
 		if (tmp->key == key)
 		{
+
+			upgrade_may_write_lock(&(tmp->nodeLock));
+
+			if (tmp->prev->key != tmp->next->key)
+			{
+				get_write_lock(&(tmp->prev->nodeLock));
+			}
+
+			get_write_lock(&(tmp->next->nodeLock));
+
 			tmp->prev->next = tmp->next;
 			tmp->next->prev = tmp->prev;
 
 			if (tmp == list->tail)
 			{
+				get_write_lock(&(list->listLock));
 				list->tail= tmp->prev;
 				list->tail->next = list->head;
 				list->head->prev = list->tail;
+				release_exclusive_lock(&(list->listLock));
 			}
+
+			if (tmp->prev->key != tmp->next->key)
+			{
+				release_exclusive_lock(&(tmp->prev->nodeLock));
+			}
+
+			release_exclusive_lock(&(tmp->next->nodeLock));
+
 			free(tmp);
+
 			return true;
 		}
+		release_shared_lock(&(tmp->nodeLock));
 		tmp = tmp->next;
+		get_read_lock(&(tmp->nodeLock));
 	}
+
+	release_shared_lock(&(tmp->nodeLock));
 	return false;
 }
 
