@@ -440,6 +440,7 @@ bool Search(int key, char* data)
 		if (tmp->key == key)
 		{
 			*data = tmp->unique;
+			release_shared_lock(&(tmp->nodeLock));
 			return true;
 		}
 
