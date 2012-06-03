@@ -384,12 +384,12 @@ bool Delete(int key)
 		if (tmp->key == key)
 		{
 
-			upgrade_may_write_lock(&(tmp->nodeLock));
-
 			if (tmp->prev->key != tmp->next->key)
 			{
 				get_write_lock(&(tmp->prev->nodeLock));
 			}
+
+			upgrade_may_write_lock(&(tmp->nodeLock));
 
 			get_write_lock(&(tmp->next->nodeLock));
 
