@@ -4,7 +4,6 @@
 #include <stdlib.h>
 
 typedef enum {Read,Write,MayWrite} Action;
-//typedef enum {false,true} bool;
 #include <stdbool.h>
 
 typedef struct queue_data{
@@ -19,7 +18,6 @@ typedef struct queue_t{
 	data last;
 } * queue;
 
-//function declaration
 void initQueue(queue q);
 void insert(queue q, Action type,int pid);
 bool remove_first(queue q);
