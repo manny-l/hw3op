@@ -1,22 +1,9 @@
 /*
  * barrier.h
- *
- *  Created on: May 18, 2012
- *      Author: root
  */
 
 #ifndef BARRIER_H_
 #define BARRIER_H_
-
-/*
-struct context_t
-{
-	//hashtable* hash;
-	int hash;
-};
-
-typedef struct context_t context_t;
-*/
 
 struct barrier_t
 {

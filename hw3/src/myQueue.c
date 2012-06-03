@@ -1,4 +1,4 @@
-#include "ourQueue.h"
+#include "myQueue.h"
 
 /*----------------------------------------------------------------
 initQueue function:
@@ -25,8 +25,8 @@ void insert(queue q, Action type,int pid)
 {
 	//create a new node for the data
 	data new_data=(data)malloc(sizeof(struct queue_data));
-	if (NULL==new_data) {
-		printf("Error in memory allocation\n");
+	if (NULL==new_data)
+	{
 		exit(0);
 	}
 	new_data->type=type;

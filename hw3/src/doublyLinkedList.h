@@ -1,15 +1,12 @@
 /*
  * doublyLinkedList.h
  *
- *  Created on: May 21, 2012
- *      Author: root
  */
 
 #ifndef DOUBLYLINKEDLIST_H_
 #define DOUBLYLINKEDLIST_H_
 
 #include <stdbool.h>
-//typedef enum {false,true} bool;
 
 typedef struct DoublyLinkedList_t* DoublyLinkedList;
 
