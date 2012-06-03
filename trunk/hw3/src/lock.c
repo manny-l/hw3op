@@ -1,48 +1,33 @@
 #include "lock.h"
 
-/*----------------------------------------------------------------
-functions declaration
-----------------------------------------------------------------*/
 void pull_from_queue(lock *l,queue q);
 
-/*----------------------------------------------------------------
-lock_init function:
-Input\Output: l - the new lock
-Return value: 0 - upon success, -1 otherwise
-Description: allocation and initialization of a new lock
------------------------------------------------------------------*/
 int lock_init(lock* l)
 {
 	l->isWriting = 0;
 	l->number_of_readers = 0;
 	l->exists_may_writes = 0;
 	pthread_mutexattr_init(&(l->attr));
-	if (pthread_mutexattr_settype(&(l->attr),PTHREAD_MUTEX_ERRORCHECK_NP)!=0){
-		printf("Error in pthread_mutexattr_settype\n");
+	if (pthread_mutexattr_settype(&(l->attr),PTHREAD_MUTEX_ERRORCHECK_NP)!=0)
+	{
 		pthread_mutexattr_destroy(&(l->attr));
 		return -1;
 	}
 	pthread_mutexattr_settype(&(l->attr),PTHREAD_MUTEX_ERRORCHECK_NP);
-	if (pthread_mutex_init(&(l->node_lock),&(l->attr))!=0){
-		printf("Error in pthread_mutex_init\n");
+	if (pthread_mutex_init(&(l->node_lock),&(l->attr))!=0)
+	{
 		pthread_mutexattr_destroy(&(l->attr));
 		return -1;
 	}
 	l->arrival_queue = (queue)malloc(sizeof(struct queue_t));
-	if (NULL==l->arrival_queue){
-		printf("Error in memory allocation\n");
+	if (NULL==l->arrival_queue)
+	{
 		return -1;
 	}
 	initQueue(l->arrival_queue);
 	return 0;
 }
 
-/*----------------------------------------------------------------
-lock_destroy function:
-Input\Output: l - the new lock
-Return value: NONE
-Description: free the lock
------------------------------------------------------------------*/
 void lock_destroy(lock * l)
 {
 	if (l->arrival_queue!=NULL)
@@ -54,29 +39,20 @@ void lock_destroy(lock * l)
 	pthread_mutexattr_destroy(&(l->attr));
 }
 
-/*----------------------------------------------------------------
-get_read_lock function:
-Input\Output: l - the lock
-Return value: NONE
-Description:- gets a readers lock
-			- updates the number of readers on the lock
------------------------------------------------------------------*/
 void get_read_lock(lock* l)
 {
 	bool entered_queue=false;
 	pthread_mutex_lock(&(l->node_lock));
 	Action next;
 
-	//if the process can't read enter queue
-	if (is_empty(l->arrival_queue,&next)==false || l->isWriting){
-		//the reader waits, thus is inserted to the queue
+	if (is_empty(l->arrival_queue,&next)==false || l->isWriting)
+	{
 		if (!entered_queue){
 			insert(l->arrival_queue,Read,getpid());
 			entered_queue=true;
 		}
 	}
 
-	//wait for the signal to run- the process waits on an empty pipe
 	if (entered_queue)
 	{
 		char * c;
@@ -89,14 +65,6 @@ void get_read_lock(lock* l)
 	pthread_mutex_unlock(&(l->node_lock));
 }
 
-/*----------------------------------------------------------------
-get_may_write_lock function:
-Input\Output: l - the lock
-Return value: NONE
-Description:- gets a MW lock
-			- updates the number of readers on the lock
-			- updates exists_may_writes data
------------------------------------------------------------------*/
 void get_may_write_lock(lock* l)
 {
 	bool entered_queue=false;
@@ -104,15 +72,15 @@ void get_may_write_lock(lock* l)
 	Action next;
 	int currPID = getpid();
 
-	//if the process can't read enter queue
-	if (is_empty(l->arrival_queue,&next)==false || l->isWriting || (l->exists_may_writes)){
-		//the reader waits, thus is inserted to the queue
+	if (is_empty(l->arrival_queue,&next)==false || l->isWriting
+			|| (l->exists_may_writes))
+	{
 		insert(l->arrival_queue,MayWrite,currPID);
 		entered_queue=true;
 	}
 
-	//wait for the signal to run- the process waits on an empty pipe
-	if (entered_queue){
+	if (entered_queue)
+	{
 		pthread_mutex_unlock(&(l->node_lock));
 		kill(currPID,19);
 		pthread_mutex_lock(&(l->node_lock));
@@ -123,29 +91,22 @@ void get_may_write_lock(lock* l)
 	pthread_mutex_unlock(&(l->node_lock));
 }
 
-/*----------------------------------------------------------------
-get_write_lock function:
-Input\Output: l - the lock
-Return value: NONE
-Description:- gets a Write lock
-			- updates isWriting data
------------------------------------------------------------------*/
 void get_write_lock(lock* l)
 {
 	bool entered_queue=false;
 	pthread_mutex_lock(&(l->node_lock));
 	Action next;
 
-	//if the process can't write enter queue
 	if (is_empty(l->arrival_queue,&next)== false || l->isWriting
-		|| (l->exists_may_writes)|| (l->number_of_readers>0)){
-		//the writer is inserted to the queue
-		if (!entered_queue){
+		|| (l->exists_may_writes)|| (l->number_of_readers>0))
+	{
+		if (!entered_queue)
+		{
 			insert(l->arrival_queue,Write,getpid());
 			entered_queue=true;
 		}
 	}
-	//wait for the signal to run- the process waits on an empty pipe
+
 	if (entered_queue){
 		char *c;
 		pthread_mutex_unlock(&(l->node_lock));
@@ -156,22 +117,13 @@ void get_write_lock(lock* l)
 	pthread_mutex_unlock(&(l->node_lock));
 }
 
-/*----------------------------------------------------------------
-upgrade_may_write_lock function:
-Input\Output: l - the lock
-Return value: NONE
-Description:- reducing the num of readers(this thread will no longer
-											be counted as a reader)
-			- gets a Write lock
-			- updates isWriting data
------------------------------------------------------------------*/
 void upgrade_may_write_lock(lock * l)
 {
 	int currPID = getpid();
 	pthread_mutex_lock(&(l->node_lock));
 	//the MW is no longer a reader
 	l->number_of_readers--;
-	//waits only for readers to finish
+	//waits only for readers to finish //
 	while(l->number_of_readers>0){
 		char * c;
 		pthread_mutex_unlock(&(l->node_lock));

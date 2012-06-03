@@ -3,7 +3,7 @@
 
 #include <pthread.h>
 #include <stdio.h>
-#include "ourQueue.h"
+#include "myQueue.h"
 
 struct lock_t {
 	pthread_mutex_t node_lock;
@@ -11,7 +11,7 @@ struct lock_t {
 	queue arrival_queue;
 	int isWriting;
 	int number_of_readers;
-	int exists_may_writes; //if may writes exists holds his pid, otherwise holds 0.
+	int exists_may_writes;
 };
 
 typedef struct lock_t lock;
