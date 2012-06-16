@@ -1,0 +1,20 @@
+#!/bin/sh
+module="rng"
+device="rng"
+
+if [ -z "$1" ]; then
+  nr_games=4
+else
+  nr_games=$1
+fi
+
+/sbin/insmod ./$module.o nr_games=$nr_games || exit 1
+
+#remove stale nodes
+rm -f /dev/${device}*
+
+major=`cat /proc/devices | awk "\\$2==\"$module\" {print \\$1}"`
+for ((i=0;i<nr_games;i++))
+do
+  mknod /dev/${device}$i c $major $i
+done

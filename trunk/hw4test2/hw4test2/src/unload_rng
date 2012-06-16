@@ -1,0 +1,10 @@
+#!/bin/sh
+module="rng"
+device="rng"
+
+/sbin/rmmod $module $* || exit 1
+
+#remove stale nodes
+rm -f /dev/${device}*
+
+
