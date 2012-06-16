@@ -32,7 +32,8 @@ int alloc_init_device_data(void ** devData);
 
 int getRandomForMode(int mode);
 int getHint(int rnd_val,int level);
-int my_abs(int x);
+//int my_abs(int x);
+int getRandomInRange(int from,int to);
 
 //file operations definition
 struct file_operations my_fops={
@@ -165,13 +166,13 @@ ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
 
 	for(ind=0; ind<count; ind++)
 	{
+		currData->nr_guesses = 0;
+		currData->rnd_val = getRandomForMode(currData->level);
+
 		if(copy_to_user(&buff[ind],&(currData->rnd_val),sizeof(char)) > 0 )
 		{
 			return -EFAULT;
 		}
-
-		currData->nr_guesses = 0;
-		currData->rnd_val = getRandomForMode(currData->level);
 
 		/*
 		if(currData->sType == ARITH_MODE)
@@ -193,6 +194,8 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 	//local parameters
 	device_data currData;
 
+	printk("A\n");
+
 	//validate params
 	if (filp==NULL || filp->private_data == NULL
 		|| buff==NULL || offp==NULL)
@@ -200,11 +203,15 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 		return -EFAULT;
 	}
 
+	printk("B\n");
+
 	//check buffer size
 	if(count != 4)
 	{ //TODO
 		return -EINVAL;
 	}
+
+	printk("C\n");
 
 	//check if file is open for writing
 	if(!(filp->f_mode&FMODE_WRITE))
@@ -212,12 +219,15 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 		return -EACCES; //file attribute conflict
 	}
 
+	printk("D\n");
+
 	//casting the data pointer
 	currData = (device_data)(filp->private_data);
 
 
 	//update cur_val
 
+	printk("E\n");
 
 	int user_val = 0;
 
@@ -225,6 +235,8 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 	{
 		return -EFAULT;
 	}
+
+	printk("F\n");
 
 	if (user_val == currData->rnd_val)
 	{
@@ -234,17 +246,20 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 	}
 
 	//WRONG GUESS
+	printk("G\n");
 
 	//reached max guesses
 	if (currData->nr_guesses + 1 == currData->max_guesses)
 	{
 		currData->nr_guesses=0;
 		currData->rnd_val = getRandomForMode(currData->level);
+		printk("H\n");
 		return currData->max_guesses;
 	}
 
 	//has more guesses
 	currData->nr_guesses++;
+	printk("I\n");
 	return currData->max_guesses - currData->nr_guesses;
 
 	/*
@@ -318,8 +333,6 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 				pCurrData->nr_guesses=0;
 				pCurrData->rnd_val = getRandomForMode(arg);
 			}
-
-
 
 			break;
 
@@ -430,6 +443,9 @@ int alloc_init_device_data(void ** devData){
 
 int getHint(int rnd_val,int level)
 {
+	return getRandomInRange(rnd_val-3*(level+1),rnd_val+3*(level+1));
+
+	/*
 	int x = 10000;
 
 	while (!(my_abs(rnd_val-x) < 3*(level +1) ))
@@ -438,41 +454,43 @@ int getHint(int rnd_val,int level)
 	}
 
 	return x;
+	*/
 }
 
-
+/*
 int my_abs(x)
 {
 	return (x>=0 ? x : -x);
+}
+*/
+
+int getRandomInRange(int from,int to)
+{
+	int tmpInt;
+	get_random_bytes(&tmpInt, sizeof(char));
+	tmpInt = tmpInt % (to+1-from);
+	tmpInt += from;
+
+	return tmpInt;
 }
 
 int getRandomForMode(int mode)
 {
 	int tmpInt;
+	get_random_bytes(&tmpInt, sizeof(char));
 
 	switch (mode)
 	{
 		case 0:
-			get_random_bytes(&tmpInt, sizeof(char));
-			tmpInt = tmpInt % 100;
+			return tmpInt % 10;
 			break;
 
 		case 1:
-			tmpInt = 100;
-			while (tmpInt > 19)
-			{
-				get_random_bytes(&tmpInt, sizeof(char));
-				tmpInt = tmpInt % 10;
-			}
+			return tmpInt % 20;
 			break;
 
 		case 2:
-			tmpInt = 100;
-			while (tmpInt > 29)
-			{
-				get_random_bytes(&tmpInt, sizeof(char));
-				tmpInt = tmpInt % 10;
-			}
+			return tmpInt % 30;
 			break;
 	}
 
