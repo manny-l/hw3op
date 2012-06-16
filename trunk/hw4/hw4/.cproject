@@ -35,7 +35,7 @@
 <option id="gnu.c.compiler.option.include.paths.906441841" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 <listOptionValue builtIn="false" value="/usr/src/linux-2.4.18-14custom/include"/>
 </option>
-<option id="gnu.c.compiler.option.misc.other.667824331" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="-fmessage-length=0" valueType="string"/>
+<option id="gnu.c.compiler.option.misc.other.667824331" name="Other flags" superClass="gnu.c.compiler.option.misc.other" value="לקרמקך-fmessage-length=0" valueType="string"/>
 <inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.410333092" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 </tool>
 <tool id="cdt.managedbuild.tool.gnu.c.linker.exe.debug.386077230" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.exe.debug">
