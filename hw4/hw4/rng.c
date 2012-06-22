@@ -1,7 +1,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/random.h>
-#include <linux/errno.h>
+#include <errno.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/fcntl.h>
@@ -56,15 +56,21 @@ struct file_operations my_fops={
 };
 
 //device data struct definition
-typedef struct device_data_s
+typedef struct game
 {
-	int rnd_val;
-	int level;
 	int nr_guesses;
 	int max_guesses;
+	int level;
+	int random_val;
+	int minor;
 	struct semaphore sem;
-} * device_data;
+	int count;
+} Game;
 
+Game* games;
+void new_game(Game* game);
+
+/*
 // TALI
 typedef struct game {//holds private game data - fill later
 	int nr_guesses;
@@ -79,6 +85,7 @@ typedef struct game {//holds private game data - fill later
 Game* games;
 int next_slot=0;
 void new_game(Game* game);
+*/
 
 
 /*------------------------------------------
@@ -87,28 +94,27 @@ void new_game(Game* game);
 
 int init_module(void)
 {
-	if(nr_games<=0) return -EINVAL;
+    //registering the module
+    int major = 0;
+    major = register_chrdev(major_number,MODULE_NAME,&my_fops);
 
-	//registering the module
-	int major = 0;
-	major = register_chrdev(major_number,MODULE_NAME,&my_fops);
+    //checking for register errors
+    if (major < 0)
+    {
+    	return major;
+    }
 
-	//checking for register errors
-	if (major < 0)
-	{
-		return major;
-	}
-
-	//saving the major_number
-	major_number = major;
-
+    //saving the major_number
+    major_number = major;
 
 	games=kmalloc(nr_games*sizeof(Game),GFP_KERNEL);
+
 	if(games==NULL)
 	{
-		//printk("Error allocating games\n");
+		printk("Error allocating games\n");
 		return -ENOSPC;
 	}
+
 	int i;
 	for (i=0;i<nr_games;i++)
 	{
@@ -117,7 +123,7 @@ int init_module(void)
 		sema_init(&games[i].sem,1);
 	}
 
-	return 0;
+    return 0;
 }
 
 void cleanup_module(void)
@@ -133,9 +139,8 @@ void cleanup_module(void)
 			Devices functions
 ------------------------------------------*/
 
-int my_open(struct inode *currInode, struct file * filp){
+int my_open(struct inode *inode, struct file * filp){
 
-	/*
 	int i,minor=MINOR(inode->i_rdev),slot=-1;
 	for (i=0;i<nr_games;i++) {
 		down_interruptible(&games[i].sem);
@@ -166,58 +171,58 @@ int my_open(struct inode *currInode, struct file * filp){
 	new_game(&games[slot]);
 	up(&games[slot].sem);
 	return 0;
-	*/
 
+    /*
 	//local parameters
-	int minor;
+    int minor;
 
-	//check parameters
-	if (currInode==NULL || filp==NULL)
-	{
-		return -EFAULT;
-	}
+    //check parameters
+    if (currInode==NULL || filp==NULL)
+    {
+            return -EFAULT;
+    }
 
-	//validating the MINOR
-	minor = MINOR(currInode->i_rdev);
-	if (minor < 0 || minor > nr_games)
-	{
-		return -ENODEV;
-	}
+    //validating the MINOR
+    minor = MINOR(currInode->i_rdev);
+    if (minor < 0 || minor > nr_games)
+    {
+            return -ENODEV;
+    }
 
-	//allocting and init the device data
-	if(alloc_init_device_data(&(filp->private_data)) < 0)
-	{
-		return -EFAULT;
-	}
+    //allocting and init the device data
+    if(alloc_init_device_data(&(filp->private_data)) < 0)
+    {
+            return -EFAULT;
+    }
 
 
-	device_data myGame = (device_data)filp->private_data;
+    device_data myGame = (device_data)filp->private_data;
 
-	myGame->level=0;
-	myGame->max_guesses=3;
-	myGame->rnd_val=getRandomForMode(0);
+    myGame->level=0;
+    myGame->max_guesses=3;
+    myGame->rnd_val=getRandomForMode(0);
 
-	return 0;
+    return 0;
+    */
 
 }
 
 int my_release(struct inode * currInode, struct file *filp)
 {
-	/*
 	int slot=*(int*)filp->private_data;
 	if (slot==-1) return -EPERM; //ERROR
 	down_interruptible(&games[slot].sem);
 	kfree(filp->private_data);
 	filp->private_data=NULL;
 	games[slot].count--;
-	if(games[slot].count==0)
-	{
+	if(games[slot].count==0){
 		games[slot].minor=-1;
 	}
 	up(&games[slot].sem);
 	return 0;
-	*/
 
+
+	/*
 	//check parameters
 	if (currInode==NULL || filp==NULL)
 	{
@@ -225,6 +230,7 @@ int my_release(struct inode * currInode, struct file *filp)
 	}
 
 	//release allocated data
+
 	device_data myGame = (device_data)filp->private_data;
 	if (myGame)
 	{
@@ -233,61 +239,20 @@ int my_release(struct inode * currInode, struct file *filp)
 	}
 
 	return 0;
+	*/
 
 }
 
-ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
+ssize_t my_read(struct file *filp, char* buf, size_t count, loff_t * offp){
 
-
-	//local parameters
-	int ind;
-	device_data currData;
-
-	//validate params
-	if (filp==NULL || filp->private_data == NULL || buff==NULL || offp==NULL || count < 0 )
-	{
+	if(buf==NULL){
 		return -EFAULT;
-	}
-
-	//check if file is open for read
-	if(!(filp->f_mode&FMODE_READ))
-	{
-		return -EACCES; //file atribute conflict
-	}
-
-	//casting the data pointer
-	currData = (device_data)(filp->private_data);
-
-	down_interruptible(&(currData->sem));
-
-	//write to buff & update cur_val
-
-	for(ind=0; ind<count; ind++)
-	{
-		currData->nr_guesses = 0;
-		currData->rnd_val = getRandomForMode(currData->level);
-
-		if(copy_to_user(&buff[ind],&(currData->rnd_val),sizeof(char)) > 0 )
-		{
-			up(&(pCurrData->sem));
-			return -EFAULT;
-		}
-	}
-	up(&(currData->sem));
-	return ind;
-
-
-	/*
-	if(buf==NULL)
-	{
-		//return -EINVAL;
-		return -ENOSPC;
 	}
 	int i,temp,slot=-1;
 	if(filp->private_data){
 		slot=*((int*)filp->private_data);
 	}
-	else { //
+	else {
 		return -EPERM; //ERROR
 	}
 	down_interruptible(&games[slot].sem);
@@ -296,30 +261,60 @@ ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
 	new_game(&games[slot]);
 	up(&games[slot].sem);
 	//copy result
-
-
 	if(copy_to_user(buf,&temp,sizeof(char))!=0) return -ENOSPC;
+	return 1;
+
+	/*
+    //local parameters
+    int ind;
+    device_data currData;
+
+    //validate params
+    if (filp==NULL || filp->private_data == NULL || buff==NULL || offp==NULL || count < 0 )
+    {
+            return -EFAULT;
+    }
+
+    //check if file is open for read
+    if(!(filp->f_mode&FMODE_READ))
+    {
+            return -EACCES; //file atribute conflict
+    }
+
+    //casting the data pointer
+    currData = (device_data)(filp->private_data);
+
+    //write to buff & update cur_val
+
+    int x;
+
+    for(ind=0; ind<count; ind++)
+    {
+            currData->nr_guesses = 0;
+            currData->rnd_val = getRandomForMode(currData->level);
+            x = currData->rnd_val;
+
+            if(copy_to_user(&buff[ind],&(currData->rnd_val),sizeof(char)) > 0 )
+            {
+                    return -EFAULT;
+            }
+    }
 
 
-	return 0;
-
-	//return temp;
-
-
-*/
+    return x;
+    */
 
 }
 
-ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * offp){
+ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp){
 
-	/*
 	int i,slot=*((int*)filp->private_data),out;
 	char guess;
 	if (slot==-1) return -EPERM; //ERROR
 	down_interruptible(&games[slot].sem);
 	if (copy_from_user(&guess,buf,sizeof(char))!=0) {
 		up(&games[slot].sem);
-		return -ENOSPC;
+		return -EFAULT;
 	}
 	if (guess==games[slot].random_val) {
 		new_game(&games[slot]);
@@ -332,10 +327,20 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 		new_game(&games[slot]);
 	}
 	out=games[slot].max_guesses-games[slot].nr_guesses;
+
+
 	up(&games[slot].sem);
 	return out;
-	*/
 
+
+	//return 1;
+}
+
+int m_llseek(struct file *filp,loff_t f_pos,int i) {
+	return -ENOSYS;
+
+
+	/*
 	//local parameters
 	device_data currData;
 
@@ -361,7 +366,7 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 	//casting the data pointer
 	currData = (device_data)(filp->private_data);
 
-	down_interruptible(&(currData->sem));
+	//down_interruptible(&(currData->sem));
 
 	//update cur_val
 
@@ -369,7 +374,7 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 
 	if(copy_from_user(&(user_val),buff,count) > 0)
 	{
-		up(&(pCurrData->sem));
+		//up(&(currData->sem));
 		return -EFAULT;
 	}
 
@@ -377,7 +382,7 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 	{
 		currData->nr_guesses=0;
 		currData->rnd_val = getRandomForMode(currData->level);
-		up(&(pCurrData->sem));
+		//up(&(currData->sem));
 		return currData->max_guesses;
 	}
 
@@ -387,7 +392,7 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 	{
 		currData->nr_guesses=0;
 		currData->rnd_val = getRandomForMode(currData->level);
-		up(&(pCurrData->sem));
+		//up(&(currData->sem));
 		return currData->max_guesses;
 	}
 
@@ -396,15 +401,15 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 
 	int rslt = currData->max_guesses - currData->nr_guesses;
 
-	up(&(currData->sem));
+	//up(&(currData->sem));
 
 	return rslt;
+	*/
 
 }
 
 int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsigned long arg){
 
-	/*
 	int i,x,slot=*((int*)filp->private_data);
 	if (slot==-1) return -EPERM; //ERROR
 	down_interruptible(&games[slot].sem);
@@ -418,7 +423,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 			new_game(&games[slot]);
 			break;
 		case RNG_GUESS:
-			if(arg<=0) {
+			if(arg<=0 || arg > INT_MAX) {
 				up(&games[slot].sem);
 				return -EINVAL;
 			}
@@ -436,12 +441,13 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 			break;
 		default:
 			up(&games[slot].sem);
-			return -EINVAL;//error
+			return -ENOTTY;//error
 			break;
 	}
 	up(&games[slot].sem);
 	return 0;
-	*/
+
+	/*
 
 	//local parameters
 	int res = 0;
@@ -455,7 +461,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 	//casting the data pointer
 	device_data pCurrData = (device_data)(filp->private_data);
 
-	down_interruptible(&(pCurrData->sem));
+	//down_interruptible(&(pCurrData->sem));
 	//executing the given command
 
 	switch(cmd)
@@ -464,7 +470,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 
 			if (arg > 2||arg < 0)
 			{
-				up(&(pCurrData->sem));
+				//up(&(pCurrData->sem));
 				return -EFAULT;
 			}
 
@@ -477,7 +483,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 
 			if (arg > INT_MAX||arg < 0)
 			{
-				up(&(pCurrData->sem));
+				//up(&(pCurrData->sem));
 				return -EFAULT;
 			}
 
@@ -510,7 +516,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 	//up(&(pCurrData->sem));
 
 	return res;
-
+	*/
 }
 
 //the module doesn't implement this function
@@ -524,7 +530,7 @@ loff_t my_llseek(struct file* filp,loff_t offp,int number)
 			help functions
 ------------------------------------------*/
 
-
+/*
 int alloc_init_device_data(void ** devData){
 
 	//allocate the new data struct
@@ -537,24 +543,16 @@ int alloc_init_device_data(void ** devData){
 	//casting the data pointer
 	device_data pCurrData = (device_data)(*devData);
 
-	//initiate the data struct
-	/*
-	pCurrData->cur_val = 0;
-	pCurrData->last_write_val=0;
-	pCurrData->d = 1;
-	pCurrData->q = 2;
-	pCurrData->sType = ARITH_MODE;
-	*/
-
 	pCurrData->level = 0;
 	pCurrData->max_guesses = 3;
 	pCurrData->rnd_val = getRandomForMode(0);
 	pCurrData->nr_guesses= 0 ;
 
-	sema_init(&(pCurrData->sem),0);
+	//sema_init(&(pCurrData->sem),0);
 
 	return 0;
 }
+*/
 
 int getHint(int rnd_val,int level)
 {
