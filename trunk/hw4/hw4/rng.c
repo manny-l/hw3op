@@ -11,6 +11,10 @@
 //#include <pthread.h>
 #include "rng.h"
 
+#define MODULE_NAME "rng"
+#define DEFAULT_MAX_GUESSES 3
+#define DEFAULT_LEVEL 0
+
 /*------------------------------------------
 Definitions & Global parameters
 ------------------------------------------*/
@@ -21,7 +25,8 @@ MODULE_LICENSE("GPL");
 //global parameters
 int major_number = 0;
 int nr_games = 0;
-struct semaphore gsem;
+//int nr_counter = 0;
+//struct semaphore gsem;
 MODULE_PARM(nr_games, "i" );
 
 //function definitions
@@ -34,6 +39,7 @@ loff_t my_llseek(struct file*,loff_t,int);
 
 int alloc_init_device_data(void ** devData);
 
+int generate_random_val(int max);
 int getRandomForMode(int mode);
 int getHint(int rnd_val,int level);
 //int my_abs(int x);
@@ -59,6 +65,21 @@ typedef struct device_data_s
 	struct semaphore sem;
 } * device_data;
 
+// TALI
+typedef struct game {//holds private game data - fill later
+	int nr_guesses;
+	int max_guesses;
+	int level;
+	char random_val;
+	int minor;
+	struct semaphore sem;
+	int count;
+} Game;
+
+Game* games;
+int next_slot=0;
+void new_game(Game* game);
+
 
 /*------------------------------------------
 			Module functions
@@ -66,6 +87,8 @@ typedef struct device_data_s
 
 int init_module(void)
 {
+	if(nr_games<=0) return -EINVAL;
+
 	//registering the module
 	int major = 0;
 	major = register_chrdev(major_number,MODULE_NAME,&my_fops);
@@ -79,12 +102,28 @@ int init_module(void)
 	//saving the major_number
 	major_number = major;
 
+
+	games=kmalloc(nr_games*sizeof(Game),GFP_KERNEL);
+	if(games==NULL)
+	{
+		//printk("Error allocating games\n");
+		return -ENOSPC;
+	}
+	int i;
+	for (i=0;i<nr_games;i++)
+	{
+		games[i].minor=-1;
+		games[i].count=0;
+		sema_init(&games[i].sem,1);
+	}
+
 	return 0;
 }
 
 void cleanup_module(void)
 {
 	//unregistering the module
+	kfree(games);
 	unregister_chrdev(major_number,MODULE_NAME);
 	major_number = 0;
 }
@@ -94,8 +133,41 @@ void cleanup_module(void)
 			Devices functions
 ------------------------------------------*/
 
-int my_open(struct inode * currInode, struct file * filp){
+int my_open(struct inode *inode, struct file * filp){
 
+	int i,minor=MINOR(inode->i_rdev),slot=-1;
+	for (i=0;i<nr_games;i++) {
+		down_interruptible(&games[i].sem);
+		if (games[i].minor==minor) {
+			if(slot!=-1) up(&games[slot].sem);
+			if(filp->private_data!=NULL && *(int*)filp->private_data==slot){
+				up(&games[i].sem);
+				return 0;
+			}
+			filp->private_data=(void*)kmalloc(sizeof(int),GFP_KERNEL);
+			*((int*)filp->private_data)=slot;
+			games[i].count++;
+			up(&games[i].sem);
+			return 0;
+		}
+		if (games[i].minor==-1 && slot==-1) slot=i;
+		if (slot!=i) up(&games[i].sem);
+	}
+	if (slot==-1) {
+		return -ENOSPC;
+	}
+	filp->private_data=(void*)kmalloc(sizeof(int),GFP_KERNEL);
+	*((int*)filp->private_data)=slot;
+	games[slot].count++;
+	games[slot].minor=minor;
+	games[slot].max_guesses=DEFAULT_MAX_GUESSES;
+	games[slot].level=DEFAULT_LEVEL;
+	new_game(&games[slot]);
+	up(&games[slot].sem);
+	return 0;
+
+
+/*
 	//local parameters
 	int minor;
 
@@ -126,10 +198,25 @@ int my_open(struct inode * currInode, struct file * filp){
 	myGame->rnd_val=getRandomForMode(0);
 
 	return 0;
+*/
 }
 
 int my_release(struct inode * currInode, struct file *filp)
 {
+	int slot=*(int*)filp->private_data;
+	if (slot==-1) return -EPERM; //ERROR
+	down_interruptible(&games[slot].sem);
+	kfree(filp->private_data);
+	filp->private_data=NULL;
+	games[slot].count--;
+	if(games[slot].count==0)
+	{
+		games[slot].minor=-1;
+	}
+	up(&games[slot].sem);
+	return 0;
+
+	/*
 	//check parameters
 	if (currInode==NULL || filp==NULL)
 	{
@@ -140,16 +227,17 @@ int my_release(struct inode * currInode, struct file *filp)
 	device_data myGame = (device_data)filp->private_data;
 	if (myGame)
 	{
-		sem_destroy(&(myGame->sem));
 		kfree(myGame);
 		filp->private_data=NULL;
 	}
 
 	return 0;
+	*/
 }
 
-ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
+ssize_t my_read(struct file *filp, char* buf, size_t count, loff_t * offp){
 
+	/*
 	//local parameters
 	int ind;
 	device_data currData;
@@ -166,12 +254,10 @@ ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
 		return -EACCES; //file atribute conflict
 	}
 
-
-
 	//casting the data pointer
 	currData = (device_data)(filp->private_data);
 
-	sem_wait(currData->sem);
+	down_interruptible(&(currData->sem));
 
 	//write to buff & update cur_val
 
@@ -180,35 +266,75 @@ ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
 		currData->nr_guesses = 0;
 		currData->rnd_val = getRandomForMode(currData->level);
 
-	if(copy_to_user(&buff[ind],&(currData->rnd_val),sizeof(char)) > 0 )
+		if(copy_to_user(&buff[ind],&(currData->rnd_val),sizeof(char)) > 0 )
 		{
 			return -EFAULT;
 		}
-
-		/*
-		if(currData->sType == ARITH_MODE)
-		{
-			currData->cur_val = (currData->cur_val+currData->d)%256;
-		}
-		else
-		{//Geometric type
-			currData->cur_val = (currData->cur_val*currData->q)%256;
-		}
-		*/
 	}
-
-	sem_post(currData->sem);
-
-
+	up(&(currData->sem));
 	return ind;
+	*/
+
+
+	if(buf==NULL)
+	{
+		//return -EINVAL;
+		return -ENOSPC;
+	}
+	int i,temp,slot=-1;
+	if(filp->private_data){
+		slot=*((int*)filp->private_data);
+	}
+	else { //
+		return -EPERM; //ERROR
+	}
+	down_interruptible(&games[slot].sem);
+	temp=games[slot].random_val;
+	//new game:
+	new_game(&games[slot]);
+	up(&games[slot].sem);
+	//copy result
+
+
+	if(copy_to_user(buf,&temp,sizeof(char))!=0) return -ENOSPC;
+
+
+	return 0;
+
+	//return temp;
+
+
+
+
 }
 
-ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * offp){
+ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp){
 
+	int i,slot=*((int*)filp->private_data),out;
+	char guess;
+	if (slot==-1) return -EPERM; //ERROR
+	down_interruptible(&games[slot].sem);
+	if (copy_from_user(&guess,buf,sizeof(char))!=0) {
+		up(&games[slot].sem);
+		return -ENOSPC;
+	}
+	if (guess==games[slot].random_val) {
+		new_game(&games[slot]);
+		out=games[slot].max_guesses;
+		up(&games[slot].sem);
+		return out;//what to return if game won?
+	}
+	games[slot].nr_guesses++;
+	if (games[slot].nr_guesses>=games[slot].max_guesses) {
+		new_game(&games[slot]);
+	}
+	out=games[slot].max_guesses-games[slot].nr_guesses;
+	up(&games[slot].sem);
+	return out;
+
+	/*
 	//local parameters
 	device_data currData;
-
-	printk("A\n");
 
 	//validate params
 	if (filp==NULL || filp->private_data == NULL
@@ -217,15 +343,11 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 		return -EFAULT;
 	}
 
-	printk("B\n");
-
 	//check buffer size
 	if(count != 4)
 	{ //TODO
 		return -EINVAL;
 	}
-
-	printk("C\n");
 
 	//check if file is open for writing
 	if(!(filp->f_mode&FMODE_WRITE))
@@ -233,15 +355,12 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 		return -EACCES; //file attribute conflict
 	}
 
-	printk("D\n");
-
 	//casting the data pointer
 	currData = (device_data)(filp->private_data);
 
+	down_interruptible(&(currData->sem));
 
 	//update cur_val
-
-	printk("E\n");
 
 	int user_val = 0;
 
@@ -249,8 +368,6 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 	{
 		return -EFAULT;
 	}
-
-	printk("F\n");
 
 	if (user_val == currData->rnd_val)
 	{
@@ -260,41 +377,65 @@ ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * off
 	}
 
 	//WRONG GUESS
-	printk("G\n");
-
 	//reached max guesses
 	if (currData->nr_guesses + 1 == currData->max_guesses)
 	{
 		currData->nr_guesses=0;
 		currData->rnd_val = getRandomForMode(currData->level);
-		printk("H\n");
 		return currData->max_guesses;
 	}
 
 	//has more guesses
 	currData->nr_guesses++;
-	printk("I\n");
-	return currData->max_guesses - currData->nr_guesses;
 
-	/*
-	if(copy_from_user(&(currData->cur_val),buff,count) > 0)
-	{
-		return -EFAULT;
-	}
+	int rslt = currData->max_guesses - currData->nr_guesses;
 
-	//mod 256 to the new cur_val
-	currData->cur_val = currData->cur_val%256;
+	up(&(currData->sem));
 
-	//update last write val
-	currData->last_write_val = currData->cur_val;
-
-
-	return count;
+	return rslt;
 	*/
 }
 
 int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsigned long arg){
 
+	int i,x,slot=*((int*)filp->private_data);
+	if (slot==-1) return -EPERM; //ERROR
+	down_interruptible(&games[slot].sem);
+	switch (cmd) {
+		case RNG_LEVEL:
+			if (arg<0 || arg>2) {
+				up(&games[slot].sem);
+				return -EINVAL; //ERROR
+			}
+			games[slot].level=arg;
+			new_game(&games[slot]);
+			break;
+		case RNG_GUESS:
+			if(arg<=0) {
+				up(&games[slot].sem);
+				return -EINVAL;
+			}
+			games[slot].max_guesses=arg;
+			new_game(&games[slot]);
+			break;
+		case RNG_HINT:
+			x=generate_random_val(6*games[slot].level+7)+games[slot].random_val-3*(games[slot].level+1);
+			games[slot].nr_guesses++;
+			if(games[slot].nr_guesses>=games[slot].max_guesses) {
+				new_game(&games[slot]);
+			}
+			up(&games[slot].sem);
+			return x>0? x : 0;
+			break;
+		default:
+			up(&games[slot].sem);
+			return -EINVAL;//error
+			break;
+	}
+	up(&games[slot].sem);
+	return 0;
+
+	/*
 	//local parameters
 	int res = 0;
 
@@ -354,64 +495,8 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 			res = -EFAULT;
 	}
 
-
-
-	/*
-	switch(cmd){
-		//reset cur_val
-		case SEQ_RESET:
-			pCurrData->cur_val = pCurrData->last_write_val;
-			break;
-		//switch ARITH_MODE and GEOM_MODE
-		case SEQ_SWCH_MOD:
-			if (pCurrData->sType == ARITH_MODE){
-				pCurrData->sType = GEOM_MODE;
-			}
-			else{
-				pCurrData->sType = ARITH_MODE;
-			}
-			break;
-		//chande to ARITH_MODE/GEOM_MODE
-		case SEQ_CHG_MOD:
-			if (arg==ARITH_MODE){
-				pCurrData->sType=ARITH_MODE;
-			}
-			else if (arg==GEOM_MODE){
-				pCurrData->sType=GEOM_MODE;
-			}
-			else {
-				return -EFAULT;
-			}
-			break;
-		//change device's d parameter
-		case SEQ_CHG_D:
-			if (arg > 255||arg < 0) {
-				return -EFAULT;
-			}
-			pCurrData->d = arg;
-			break;
-		//get device's d parameter
-		case SEQ_GET_D:
-			res = pCurrData->d;
-			break;
-		//change device's q parameter
-		case SEQ_CHG_Q:
-			if (arg > 255 || arg < 0) {
-				return -EFAULT;
-			}
-			pCurrData->q = arg;
-			break;
-		//get device's q parameter
-		case SEQ_GET_Q:
-			res = pCurrData->q;
-			break;
-		//if all else fail => error
-		default:
-			res = -EFAULT;
-	}
-	*/
-
 	return res;
+	*/
 }
 
 //the module doesn't implement this function
@@ -451,7 +536,8 @@ int alloc_init_device_data(void ** devData){
 	pCurrData->max_guesses = 3;
 	pCurrData->rnd_val = getRandomForMode(0);
 	pCurrData->nr_guesses= 0 ;
-	sem_init(&(pCurrData->sem),0,1);
+
+	sema_init(&(pCurrData->sem),0);
 
 	return 0;
 }
@@ -510,6 +596,17 @@ int getRandomForMode(int mode)
 	}
 
 	return tmpInt;
+}
+
+int generate_random_val(int max) {
+	unsigned int val;
+	get_random_bytes(&val,sizeof(unsigned int));
+	return val % max;
+}
+
+void new_game(Game* game) {
+	game->nr_guesses=0;
+	game->random_val=generate_random_val((game->level+1)*10);
 }
 
 /*
