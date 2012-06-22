@@ -133,8 +133,9 @@ void cleanup_module(void)
 			Devices functions
 ------------------------------------------*/
 
-int my_open(struct inode *inode, struct file * filp){
+int my_open(struct inode *currInode, struct file * filp){
 
+	/*
 	int i,minor=MINOR(inode->i_rdev),slot=-1;
 	for (i=0;i<nr_games;i++) {
 		down_interruptible(&games[i].sem);
@@ -165,9 +166,8 @@ int my_open(struct inode *inode, struct file * filp){
 	new_game(&games[slot]);
 	up(&games[slot].sem);
 	return 0;
+	*/
 
-
-/*
 	//local parameters
 	int minor;
 
@@ -198,11 +198,12 @@ int my_open(struct inode *inode, struct file * filp){
 	myGame->rnd_val=getRandomForMode(0);
 
 	return 0;
-*/
+
 }
 
 int my_release(struct inode * currInode, struct file *filp)
 {
+	/*
 	int slot=*(int*)filp->private_data;
 	if (slot==-1) return -EPERM; //ERROR
 	down_interruptible(&games[slot].sem);
@@ -215,8 +216,8 @@ int my_release(struct inode * currInode, struct file *filp)
 	}
 	up(&games[slot].sem);
 	return 0;
+	*/
 
-	/*
 	//check parameters
 	if (currInode==NULL || filp==NULL)
 	{
@@ -232,12 +233,12 @@ int my_release(struct inode * currInode, struct file *filp)
 	}
 
 	return 0;
-	*/
+
 }
 
-ssize_t my_read(struct file *filp, char* buf, size_t count, loff_t * offp){
+ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
 
-	/*
+
 	//local parameters
 	int ind;
 	device_data currData;
@@ -268,14 +269,15 @@ ssize_t my_read(struct file *filp, char* buf, size_t count, loff_t * offp){
 
 		if(copy_to_user(&buff[ind],&(currData->rnd_val),sizeof(char)) > 0 )
 		{
+			up(&(pCurrData->sem));
 			return -EFAULT;
 		}
 	}
 	up(&(currData->sem));
 	return ind;
-	*/
 
 
+	/*
 	if(buf==NULL)
 	{
 		//return -EINVAL;
@@ -304,12 +306,13 @@ ssize_t my_read(struct file *filp, char* buf, size_t count, loff_t * offp){
 	//return temp;
 
 
-
+*/
 
 }
 
-ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp){
+ssize_t my_write(struct file *filp, const char* buff, size_t count, loff_t * offp){
 
+	/*
 	int i,slot=*((int*)filp->private_data),out;
 	char guess;
 	if (slot==-1) return -EPERM; //ERROR
@@ -331,8 +334,8 @@ ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp
 	out=games[slot].max_guesses-games[slot].nr_guesses;
 	up(&games[slot].sem);
 	return out;
+	*/
 
-	/*
 	//local parameters
 	device_data currData;
 
@@ -366,6 +369,7 @@ ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp
 
 	if(copy_from_user(&(user_val),buff,count) > 0)
 	{
+		up(&(pCurrData->sem));
 		return -EFAULT;
 	}
 
@@ -373,6 +377,7 @@ ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp
 	{
 		currData->nr_guesses=0;
 		currData->rnd_val = getRandomForMode(currData->level);
+		up(&(pCurrData->sem));
 		return currData->max_guesses;
 	}
 
@@ -382,6 +387,7 @@ ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp
 	{
 		currData->nr_guesses=0;
 		currData->rnd_val = getRandomForMode(currData->level);
+		up(&(pCurrData->sem));
 		return currData->max_guesses;
 	}
 
@@ -393,11 +399,12 @@ ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp
 	up(&(currData->sem));
 
 	return rslt;
-	*/
+
 }
 
 int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsigned long arg){
 
+	/*
 	int i,x,slot=*((int*)filp->private_data);
 	if (slot==-1) return -EPERM; //ERROR
 	down_interruptible(&games[slot].sem);
@@ -434,8 +441,8 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 	}
 	up(&games[slot].sem);
 	return 0;
+	*/
 
-	/*
 	//local parameters
 	int res = 0;
 
@@ -448,6 +455,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 	//casting the data pointer
 	device_data pCurrData = (device_data)(filp->private_data);
 
+	down_interruptible(&(pCurrData->sem));
 	//executing the given command
 
 	switch(cmd)
@@ -456,6 +464,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 
 			if (arg > 2||arg < 0)
 			{
+				up(&(pCurrData->sem));
 				return -EFAULT;
 			}
 
@@ -468,6 +477,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 
 			if (arg > INT_MAX||arg < 0)
 			{
+				up(&(pCurrData->sem));
 				return -EFAULT;
 			}
 
@@ -483,6 +493,8 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 
 			res = getHint(pCurrData->rnd_val,pCurrData->level);
 
+			if (res < 0) res = 0;
+
 			if (pCurrData->nr_guesses + 1 == pCurrData->max_guesses)
 			{
 				pCurrData->nr_guesses=0;
@@ -495,8 +507,10 @@ int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsign
 			res = -EFAULT;
 	}
 
+	//up(&(pCurrData->sem));
+
 	return res;
-	*/
+
 }
 
 //the module doesn't implement this function
