@@ -3,9 +3,12 @@
 #include <linux/random.h>
 #include <linux/errno.h>
 #include <linux/fs.h>
+#include <linux/proc_fs.h>
+#include <linux/fcntl.h>
 #include <asm/uaccess.h>
 #include <linux/slab.h>
 #include <asm/semaphore.h>
+//#include <pthread.h>
 #include "rng.h"
 
 /*------------------------------------------
@@ -18,6 +21,7 @@ MODULE_LICENSE("GPL");
 //global parameters
 int major_number = 0;
 int nr_games = 0;
+struct semaphore gsem;
 MODULE_PARM(nr_games, "i" );
 
 //function definitions
@@ -52,6 +56,7 @@ typedef struct device_data_s
 	int level;
 	int nr_guesses;
 	int max_guesses;
+	struct semaphore sem;
 } * device_data;
 
 
@@ -132,9 +137,11 @@ int my_release(struct inode * currInode, struct file *filp)
 	}
 
 	//release allocated data
-	if (filp->private_data)
+	device_data myGame = (device_data)filp->private_data;
+	if (myGame)
 	{
-		kfree(filp->private_data);
+		sem_destroy(&(myGame->sem));
+		kfree(myGame);
 		filp->private_data=NULL;
 	}
 
@@ -159,8 +166,12 @@ ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
 		return -EACCES; //file atribute conflict
 	}
 
+
+
 	//casting the data pointer
 	currData = (device_data)(filp->private_data);
+
+	sem_wait(currData->sem);
 
 	//write to buff & update cur_val
 
@@ -169,7 +180,7 @@ ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
 		currData->nr_guesses = 0;
 		currData->rnd_val = getRandomForMode(currData->level);
 
-		if(copy_to_user(&buff[ind],&(currData->rnd_val),sizeof(char)) > 0 )
+	if(copy_to_user(&buff[ind],&(currData->rnd_val),sizeof(char)) > 0 )
 		{
 			return -EFAULT;
 		}
@@ -185,6 +196,9 @@ ssize_t my_read(struct file *filp, char* buff, size_t count, loff_t * offp){
 		}
 		*/
 	}
+
+	sem_post(currData->sem);
+
 
 	return ind;
 }
@@ -437,6 +451,7 @@ int alloc_init_device_data(void ** devData){
 	pCurrData->max_guesses = 3;
 	pCurrData->rnd_val = getRandomForMode(0);
 	pCurrData->nr_guesses= 0 ;
+	sem_init(&(pCurrData->sem),0,1);
 
 	return 0;
 }
