@@ -249,11 +249,6 @@ ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp
 	return out;
 }
 
-int m_llseek(struct file *filp,loff_t f_pos,int i)
-{
-	return -ENOSYS;
-}
-
 int my_ioctl(struct inode *currInode, struct file* filp,
 		unsigned int cmd, unsigned long arg)
 {
