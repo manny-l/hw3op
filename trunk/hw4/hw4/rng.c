@@ -108,9 +108,9 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-	major_number = 0;
 	kfree(games_collection);
 	unregister_chrdev(major_number,MODULE_NAME);
+	major_number = 0;
 }
 
 
