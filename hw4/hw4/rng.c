@@ -1,3 +1,5 @@
+// rng.c !!
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/random.h>
@@ -10,9 +12,9 @@
 #include <asm/semaphore.h>
 #include "rng.h"
 
+#define MODULE_NAME "rng"
 #define DEFAULT_MAX_GUESSES 3
 #define DEFAULT_LEVEL 0
-#define MODULE_NAME "rng"
 MODULE_LICENSE("GPL");
 
 //function definitions
@@ -160,8 +162,8 @@ int my_open(struct inode *inode, struct file * filp){
 
 int my_release(struct inode * currInode, struct file *filp)
 {
-	int slot=*(int*)filp->private_data;
-	if (slot==-1)
+	int currIndex=*(int*)filp->private_data;
+	if (currIndex==-1)
 	{
 		return -EPERM;
 	}
@@ -170,10 +172,10 @@ int my_release(struct inode * currInode, struct file *filp)
 
 	kfree(filp->private_data);
 	filp->private_data=NULL;
-	games_collection[slot].count--;
-	if (games_collection[slot].count==0)
+	games_collection[currIndex].count--;
+	if (games_collection[currIndex].count==0)
 	{
-		games_collection[slot].minor=-1;
+		games_collection[currIndex].minor=-1;
 	}
 
 	up(&main_sem);
@@ -221,7 +223,7 @@ ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp
 
 	down_interruptible(&main_sem);
 
-	if (copy_from_user(&guess,buf,sizeof(char))!=0)
+	if (copy_from_user(&guess,buf,sizeof(char)) !=0 )
 	{
 		up(&main_sem);
 		return -EFAULT;
@@ -268,7 +270,6 @@ int my_ioctl(struct inode *currInode, struct file* filp,
 	switch (cmd)
 	{
 		case RNG_LEVEL:
-
 			if (arg < 0 || arg > 2)
 			{
 				up(&main_sem);
@@ -289,8 +290,6 @@ int my_ioctl(struct inode *currInode, struct file* filp,
 			break;
 
 		case RNG_HINT:
-
-
 			currGuess=gen_rand(6*games_collection[currIndex].level+7)+
 				games_collection[currIndex].rand_val-3*
 				(games_collection[currIndex].level+1);
@@ -311,9 +310,7 @@ int my_ioctl(struct inode *currInode, struct file* filp,
 			break;
 
 		default:
-
 			up(&main_sem);
-
 			return -ENOTTY;
 			break;
 	}
