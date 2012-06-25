@@ -40,10 +40,10 @@ loff_t my_llseek(struct file*,loff_t,int);
 int alloc_init_device_data(void ** devData);
 
 int generate_random_val(int max);
-int getRandomForMode(int mode);
-int getHint(int rnd_val,int level);
+//int getRandomForMode(int mode);
+//int getHint(int rnd_val,int level);
 //int my_abs(int x);
-int getRandomInRange(int from,int to);
+//int getRandomInRange(int from,int to);
 
 //file operations definition
 struct file_operations my_fops={
@@ -72,7 +72,7 @@ Game* games;
 void new_game(Game* game);
 
 /*
-// TALI
+// ORIG
 typedef struct game {//holds private game data - fill later
 	int nr_guesses;
 	int max_guesses;
@@ -117,7 +117,6 @@ int init_module(void)
 	}
 
 	sema_init(&main_sem,1);
-	down_interruptible(&main_sem);
 
 	int i;
 	for (i=0;i<nr_games;i++)
@@ -126,8 +125,6 @@ int init_module(void)
 		games[i].count=0;
 		sema_init(&games[i].sem,1);
 	}
-
-	up(&main_sem);
 
     return 0;
 }
@@ -147,49 +144,59 @@ void cleanup_module(void)
 
 int my_open(struct inode *inode, struct file * filp){
 
+	down_interruptible(&main_sem);
+
 	int i,minor=MINOR(inode->i_rdev),slot=-1;
-	for (i=0;i<nr_games;i++) {
-
-		down_interruptible(&main_sem);
-		Game* gamePtr = &(games[i]);
-		up(&main_sem);
-
-		down_interruptible(&(gamePtr->sem));
+	for (i=0;i<nr_games;i++)
+	{
 		//down_interruptible(&games[i].sem);
-		if (gamePtr->minor==minor) {
-			if(slot!=-1) up(&gamePtr->sem);
-			if(filp->private_data!=NULL && *(int*)filp->private_data==slot){
-				up(&gamePtr->sem);
+		if (games[i].minor==minor)
+		{
+			if(slot!=-1)
+			{
+				//up(&games[slot].sem);
+			}
+
+			if (filp->private_data!=NULL && *(int*)filp->private_data==slot)
+			{
+				up(&main_sem);
+				//up(&games[i].sem);
 				return 0;
 			}
 			filp->private_data=(void*)kmalloc(sizeof(int),GFP_KERNEL);
-			*((int*)filp->private_data)=slot;
-			gamePtr->count++;
-			up(&gamePtr->sem);
+			*((int*)filp->private_data)=i; // ZZZ
+			//*((int*)filp->private_data)=slot; //ZZZ
+			games[i].count++;
+			up(&main_sem);
+			//up(&games[i].sem);
 			return 0;
 		}
-		if (gamePtr->minor==-1 && slot==-1) slot=i;
-		if (slot!=i) up(&gamePtr->sem);
+		if (games[i].minor==-1 && slot==-1)
+		{
+			slot=i;
+		}
+
+		if (slot!=i)
+		{
+			//up(&main_sem);
+			//up(&games[i].sem);
+		}
 	}
 	if (slot==-1)
 	{
+		up(&main_sem);
 		return -ENOSPC;
 	}
+
 	filp->private_data=(void*)kmalloc(sizeof(int),GFP_KERNEL);
-	*((int*)filp->private_data)=slot;
-
-	down_interruptible(&main_sem);
-	Game* slotPtr = &(games[i]);
+	*((int*)filp->private_data)=slot; //ZZZ
+	games[slot].count++;
+	games[slot].minor=minor;
+	games[slot].max_guesses=DEFAULT_MAX_GUESSES;
+	games[slot].level=DEFAULT_LEVEL;
+	new_game(&games[slot]);
 	up(&main_sem);
-
-	slotPtr->count++;
-	slotPtr->minor=minor;
-	slotPtr->max_guesses=DEFAULT_MAX_GUESSES;
-	slotPtr->level=DEFAULT_LEVEL;
-	new_game(slotPtr);
-
-	up(&slotPtr->sem);
-
+	//up(&games[slot].sem);
 	return 0;
 
     /*
@@ -215,7 +222,6 @@ int my_open(struct inode *inode, struct file * filp){
             return -EFAULT;
     }
 
-
     device_data myGame = (device_data)filp->private_data;
 
     myGame->level=0;
@@ -230,15 +236,25 @@ int my_open(struct inode *inode, struct file * filp){
 int my_release(struct inode * currInode, struct file *filp)
 {
 	int slot=*(int*)filp->private_data;
-	if (slot==-1) return -EPERM; //ERROR
-	down_interruptible(&games[slot].sem);
+	if (slot==-1)
+	{
+		return -EPERM; //ERROR
+	}
+
+	down_interruptible(&main_sem);
+	//down_interruptible(&games[slot].sem);
+
 	kfree(filp->private_data);
 	filp->private_data=NULL;
 	games[slot].count--;
-	if(games[slot].count==0){
+	if (games[slot].count==0)
+	{
 		games[slot].minor=-1;
 	}
-	up(&games[slot].sem);
+
+	up(&main_sem);
+	//up(&games[slot].sem);
+
 	return 0;
 
 
@@ -265,22 +281,29 @@ int my_release(struct inode * currInode, struct file *filp)
 
 ssize_t my_read(struct file *filp, char* buf, size_t count, loff_t * offp){
 
-	if(buf==NULL)
+	if (buf==NULL)
 	{
 		return -EFAULT;
 	}
 	int i,temp,slot=-1;
-	if(filp->private_data){
+	if(filp->private_data != NULL)
+	{
 		slot=*((int*)filp->private_data);
 	}
-	else {
+	else
+	{
 		return -EPERM; //ERROR
 	}
-	down_interruptible(&games[slot].sem);
+
+	down_interruptible(&main_sem);
+	//down_interruptible(&games[slot].sem);
+
 	temp=games[slot].random_val;
 	//new game:
 	new_game(&games[slot]);
-	up(&games[slot].sem);
+
+	up(&main_sem);
+	//up(&games[slot].sem);
 	//copy result
 	if(copy_to_user(buf,&temp,sizeof(char))!=0) return -ENOSPC;
 	return 1;
@@ -327,30 +350,42 @@ ssize_t my_read(struct file *filp, char* buf, size_t count, loff_t * offp){
 
 }
 
-ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp){
-
+ssize_t my_write(struct file *filp, const char* buf, size_t count, loff_t * offp)
+{
 	int i,slot=*((int*)filp->private_data),out;
 	char guess;
-	if (slot==-1) return -EPERM; //ERROR
-	down_interruptible(&games[slot].sem);
-	if (copy_from_user(&guess,buf,sizeof(char))!=0) {
-		up(&games[slot].sem);
+	if (slot==-1)
+	{
+		return -EPERM; //ERROR
+	}
+
+	down_interruptible(&main_sem);
+	//down_interruptible(&games[slot].sem);
+
+	if (copy_from_user(&guess,buf,sizeof(char))!=0)
+	{
+
+		up(&main_sem);
+		//up(&games[slot].sem);
 		return -EFAULT;
 	}
-	if (guess==games[slot].random_val) {
+	if (guess==games[slot].random_val)
+	{
 		new_game(&games[slot]);
 		out=games[slot].max_guesses;
-		up(&games[slot].sem);
-		return out;//what to return if game won?
+		up(&main_sem);
+		//up(&games[slot].sem);
+		return out;
 	}
 	games[slot].nr_guesses++;
-	if (games[slot].nr_guesses>=games[slot].max_guesses) {
+	if (games[slot].nr_guesses>=games[slot].max_guesses)
+	{
 		new_game(&games[slot]);
 	}
 	out=games[slot].max_guesses-games[slot].nr_guesses;
 
-
-	up(&games[slot].sem);
+	up(&main_sem);
+	//up(&games[slot].sem);
 	return out;
 
 
@@ -429,43 +464,61 @@ int m_llseek(struct file *filp,loff_t f_pos,int i) {
 
 }
 
-int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsigned long arg){
-
+int my_ioctl(struct inode *currInode, struct file* filp,unsigned int cmd, unsigned long arg)
+{
 	int i,x,slot=*((int*)filp->private_data);
 	if (slot==-1) return -EPERM; //ERROR
-	down_interruptible(&games[slot].sem);
-	switch (cmd) {
+
+	down_interruptible(&main_sem);
+	//down_interruptible(&games[slot].sem);
+
+	switch (cmd)
+	{
 		case RNG_LEVEL:
-			if (arg<0 || arg>2) {
-				up(&games[slot].sem);
+			if (arg<0 || arg>2)
+			{
+				up(&main_sem);
+				//up(&games[slot].sem);
 				return -EINVAL; //ERROR
 			}
 			games[slot].level=arg;
 			new_game(&games[slot]);
 			break;
+
 		case RNG_GUESS:
-			if(arg<=0 || arg > INT_MAX) {
-				up(&games[slot].sem);
+			if(arg<=0 || arg > INT_MAX)
+			{
+				up(&main_sem);
+				//up(&games[slot].sem);
 				return -EINVAL;
 			}
 			games[slot].max_guesses=arg;
 			new_game(&games[slot]);
 			break;
+
 		case RNG_HINT:
 			x=generate_random_val(6*games[slot].level+7)+games[slot].random_val-3*(games[slot].level+1);
+			if (x<0)
+			{
+				x=0;
+			}
 			games[slot].nr_guesses++;
-			if(games[slot].nr_guesses>=games[slot].max_guesses) {
+			if(games[slot].nr_guesses>=games[slot].max_guesses)
+			{
 				new_game(&games[slot]);
 			}
-			up(&games[slot].sem);
-			return x>0? x : 0;
+			up(&main_sem);
+			//up(&games[slot].sem);
+			return x;
 			break;
 		default:
-			up(&games[slot].sem);
+			up(&main_sem);
+			//up(&games[slot].sem);
 			return -ENOTTY;//error
 			break;
 	}
-	up(&games[slot].sem);
+	up(&main_sem);
+	//up(&games[slot].sem);
 	return 0;
 
 	/*
@@ -575,21 +628,12 @@ int alloc_init_device_data(void ** devData){
 }
 */
 
+/*
 int getHint(int rnd_val,int level)
 {
 	return getRandomInRange(rnd_val-3*(level+1),rnd_val+3*(level+1));
-
-	/*
-	int x = 10000;
-
-	while (!(my_abs(rnd_val-x) < 3*(level +1) ))
-	{
-		get_random_bytes(&x, sizeof(char));
-	}
-
-	return x;
-	*/
 }
+*/
 
 /*
 int my_abs(x)
@@ -598,6 +642,7 @@ int my_abs(x)
 }
 */
 
+/*
 int getRandomInRange(int from,int to)
 {
 	int tmpInt;
@@ -630,6 +675,7 @@ int getRandomForMode(int mode)
 
 	return tmpInt;
 }
+*/
 
 int generate_random_val(int max) {
 	unsigned int val;
