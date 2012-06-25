@@ -67,6 +67,7 @@ typedef struct game
 	int count;
 } Game;
 
+struct semaphore main_sem;
 Game* games;
 void new_game(Game* game);
 
@@ -115,6 +116,9 @@ int init_module(void)
 		return -ENOSPC;
 	}
 
+	sema_init(&main_sem,1);
+	down_interruptible(&main_sem);
+
 	int i;
 	for (i=0;i<nr_games;i++)
 	{
@@ -122,6 +126,8 @@ int init_module(void)
 		games[i].count=0;
 		sema_init(&games[i].sem,1);
 	}
+
+	up(&main_sem);
 
     return 0;
 }
@@ -143,33 +149,47 @@ int my_open(struct inode *inode, struct file * filp){
 
 	int i,minor=MINOR(inode->i_rdev),slot=-1;
 	for (i=0;i<nr_games;i++) {
-		down_interruptible(&games[i].sem);
-		if (games[i].minor==minor) {
-			if(slot!=-1) up(&games[slot].sem);
+
+		down_interruptible(&main_sem);
+		Game* gamePtr = &(games[i]);
+		up(&main_sem);
+
+		down_interruptible(&(gamePtr->sem));
+		//down_interruptible(&games[i].sem);
+		if (gamePtr->minor==minor) {
+			if(slot!=-1) up(&gamePtr->sem);
 			if(filp->private_data!=NULL && *(int*)filp->private_data==slot){
-				up(&games[i].sem);
+				up(&gamePtr->sem);
 				return 0;
 			}
 			filp->private_data=(void*)kmalloc(sizeof(int),GFP_KERNEL);
 			*((int*)filp->private_data)=slot;
-			games[i].count++;
-			up(&games[i].sem);
+			gamePtr->count++;
+			up(&gamePtr->sem);
 			return 0;
 		}
-		if (games[i].minor==-1 && slot==-1) slot=i;
-		if (slot!=i) up(&games[i].sem);
+		if (gamePtr->minor==-1 && slot==-1) slot=i;
+		if (slot!=i) up(&gamePtr->sem);
 	}
-	if (slot==-1) {
+	if (slot==-1)
+	{
 		return -ENOSPC;
 	}
 	filp->private_data=(void*)kmalloc(sizeof(int),GFP_KERNEL);
 	*((int*)filp->private_data)=slot;
-	games[slot].count++;
-	games[slot].minor=minor;
-	games[slot].max_guesses=DEFAULT_MAX_GUESSES;
-	games[slot].level=DEFAULT_LEVEL;
-	new_game(&games[slot]);
-	up(&games[slot].sem);
+
+	down_interruptible(&main_sem);
+	Game* slotPtr = &(games[i]);
+	up(&main_sem);
+
+	slotPtr->count++;
+	slotPtr->minor=minor;
+	slotPtr->max_guesses=DEFAULT_MAX_GUESSES;
+	slotPtr->level=DEFAULT_LEVEL;
+	new_game(slotPtr);
+
+	up(&slotPtr->sem);
+
 	return 0;
 
     /*
@@ -245,7 +265,8 @@ int my_release(struct inode * currInode, struct file *filp)
 
 ssize_t my_read(struct file *filp, char* buf, size_t count, loff_t * offp){
 
-	if(buf==NULL){
+	if(buf==NULL)
+	{
 		return -EFAULT;
 	}
 	int i,temp,slot=-1;
